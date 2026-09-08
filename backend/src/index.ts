@@ -52,6 +52,13 @@ app.post("/marketplace/services", async (request,reply) => {
             message: "name, endpoint, queryType, and priceHbar are required",
         });
     }
+
+    if (body.queryType !== "ip" && body.queryType !== "hash") {
+        return reply.code(400).send({
+            error: "validation_error",
+            message: 'queryType must be "ip" or "hash"',
+        });
+    }
     
     const service = createService(body, verified.providerId);
     return reply.code(201).send(service);
