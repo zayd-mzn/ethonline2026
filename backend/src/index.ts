@@ -7,8 +7,9 @@
  */
 
 import Fastify from "fastify";
-import { listServices, seedServices } from "./registry.js";
-import type { ServicesListResponse } from "./types.js";
+import { listServices, seedServices, createService } from "./registry.js";
+import type { ServicesListResponse,CreateServiceRequest } from "./types.js";
+import { stubIdentity } from "./identity.stub.js";
 
 const PORT = Number(process.env.PORT ?? 3001);
 const HOST = process.env.HOST ?? "0.0.0.0";
@@ -24,6 +25,36 @@ app.get("/health", async () => {
 // Discovery: agents and the frontend call this to see available services.
 app.get("/marketplace/services", async (): Promise<ServicesListResponse> => {
   return { services: listServices() };
+});
+
+// Publish a service. Gated by Selfie Check (stubbed until M4's identity.ts lands).
+app.post("/marketplace/services", async (request,reply) => {
+    const proof = request.headers["x-selfie-check-proof"];
+    if (typeof proof !== "string") {
+        return reply.code(401).send({
+            error: "unauthorized",
+            message: "Missing X-Selfie-Check-Proof header",
+        });
+    }
+
+    const verified = await stubIdentity.verifySelfieCheck(proof);
+    if (!verified) {
+        return reply.code(401).send({
+            error: "unauthorized",
+            message: "Invalid Selfie Check proof",
+        });
+    }
+
+    const body = request.body as CreateServiceRequest;
+    if (!body?.name || !body?.endpoint || !body?.queryType || body?.priceHbar == null) {
+        return reply.code(400).send({
+            error: "validation_error",
+            message: "name, endpoint, queryType, and priceHbar are required",
+        });
+    }
+    
+    const service = createService(body, verified.providerId);
+    return reply.code(201).send(service);
 });
 
 async function main(): Promise<void> {
