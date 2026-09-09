@@ -121,7 +121,15 @@ app.post("/api/triage", async (request, reply) => {
 async function main(): Promise<void> {
   try {
     seedServices();                       // populate registry before serving
-    await initHcsTopic();                 // create HCS audit topic on Hedera
+    // HCS audit logging is an enhancement — don't let it block startup.
+    // Without Hedera creds the server still serves; the audit trail is simply off.
+    try {
+      await initHcsTopic();               // create HCS audit topic on Hedera
+    } catch (err) {
+      app.log.warn(
+        `HCS audit logging disabled: ${err instanceof Error ? err.message : String(err)}`,
+      );
+    }
     await app.listen({ port: PORT, host: HOST });
   } catch (err) {
     app.log.error(err);
