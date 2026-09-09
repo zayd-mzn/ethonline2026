@@ -4,11 +4,12 @@
 
 import { describe, it } from "node:test";
 import assert from "node:assert";
+import crypto from "node:crypto";
+import crypto from "node:crypto";
 
 describe("Identity Verification", () => {
   describe("Provider ID generation", () => {
     it("should generate stable provider IDs from nullifier hash", () => {
-      const crypto = require("node:crypto");
       
       const nullifierHash = "0xabcd1234567890";
       
@@ -31,7 +32,6 @@ describe("Identity Verification", () => {
     });
 
     it("should generate different IDs for different nullifiers", () => {
-      const crypto = require("node:crypto");
       
       const nullifier1 = "0xabcd1234567890";
       const nullifier2 = "0xdcba0987654321";
@@ -82,7 +82,6 @@ describe("Identity Verification", () => {
     });
 
     it("should generate stable agent IDs from account", () => {
-      const crypto = require("node:crypto");
       
       const accountId = "0.0.12345";
       
