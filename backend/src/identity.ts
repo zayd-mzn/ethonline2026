@@ -59,7 +59,7 @@ async function verifySelfieCheckProof(proofString: string): Promise<{ success: b
       return { success: false };
     }
 
-    const result = await response.json();
+    const result = (await response.json()) as { success?: boolean };
     
     if (result.success) {
       return { 
