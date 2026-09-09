@@ -8,9 +8,10 @@
 
 import Fastify from "fastify";
 import { listServices, seedServices, createService } from "./registry.js";
-import type { ServicesListResponse,CreateServiceRequest } from "./types.js";
+import type { ServicesListResponse,CreateServiceRequest, TriageRequest } from "./types.js";
 import { worldIdentity } from "./identity.js";
 import { lookupIpReputation, checkHash } from "./intel.js";
+import { triage } from "./triage.js";
 import { paymentGate } from "./paymentGate.stub.js";
 import { getServiceByEndpoint } from "./registry.js";
 
@@ -88,6 +89,26 @@ app.get("/api/hash-check",
     return reply.code(400).send({ error: "validation_error", message: "query param 'hash' is required" });
   }
   return checkHash(hash);
+});
+
+// Batch triage: score and stack-rank a list of indicators, worst-first.
+// The capability the Bazantic recipe builds on. Not payment-gated for now so
+// agents can call it directly; gate it later if per-batch billing is wanted.
+app.post("/api/triage", async (request, reply) => {
+  const body = request.body as TriageRequest;
+  if (!body || !Array.isArray(body.indicators) || body.indicators.length === 0) {
+    return reply.code(400).send({
+      error: "validation_error",
+      message: "body must include a non-empty 'indicators' array",
+    });
+  }
+  if (body.indicators.some((i) => typeof i !== "string")) {
+    return reply.code(400).send({
+      error: "validation_error",
+      message: "'indicators' must be an array of strings",
+    });
+  }
+  return triage(body.indicators);
 });
 
 async function main(): Promise<void> {

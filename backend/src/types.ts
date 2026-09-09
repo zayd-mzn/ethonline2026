@@ -67,6 +67,27 @@ export interface HashCheckResult {
   source: string;         // e.g. "virustotal"
 }
 
+/** Body of POST /api/triage — a batch of indicators to score and rank. */
+export interface TriageRequest {
+  indicators: string[];   // mix of IPs and file hashes
+}
+
+/** One ranked indicator in a triage response. */
+export interface TriageItem {
+  indicator: string;      // the original input
+  queryType: QueryType;   // how it was classified ("ip" | "hash")
+  score: number;          // normalized threat score 0-100 (higher = worse)
+  malicious: boolean;     // convenience flag
+  detail: IpReputationResult | HashCheckResult; // the underlying result
+}
+
+/** Response of POST /api/triage — indicators sorted worst-first. */
+export interface TriageResponse {
+  ranked: TriageItem[];   // sorted by score descending
+  count: number;
+  maliciousCount: number;
+}
+
 /** Consistent error envelope for all non-2xx (except 402, which has its own shape). */
 export interface ApiError {
   error: string;          // machine-readable code
