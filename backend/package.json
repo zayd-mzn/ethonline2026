@@ -17,12 +17,12 @@
     "node": ">=20"
   },
   "dependencies": {
-    "better-sqlite3": "^11.10.0",
+    "@hashgraph/sdk": "^2.81.0",
     "fastify": "^5.12.3"
   },
   "devDependencies": {
     "@types/better-sqlite3": "^7.6.13",
-    "@types/node": "^20.14.0",
+    "@types/node": "^22.20.2",
     "tsx": "^4.16.0",
     "typescript": "^5.5.0"
   }

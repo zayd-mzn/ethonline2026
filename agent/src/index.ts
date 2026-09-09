@@ -12,7 +12,7 @@ import { Budget } from "./budget.js";
 import { loadConfig } from "./config.js";
 import { EventStreamServer } from "./event-stream.js";
 import { investigate } from "./loop.js";
-import { StubPaymentClient } from "./payment.js";
+import { HederaPaymentClient, StubPaymentClient } from "./payment.js";
 import { formatReport } from "./report.js";
 import { Wallet } from "./wallet.js";
 import { registerAgent, verifyAgentBacking } from "./agent-identity.js";
@@ -72,7 +72,7 @@ async function main(): Promise<void> {
       backendUrl: config.backendUrl,
       emitter,
       budget,
-      payment: new StubPaymentClient(),
+      payment: wallet ? new HederaPaymentClient(wallet) : new StubPaymentClient(),
     });
     console.log("\n" + formatReport(report));
     console.log(`\nspent ${budget.totalSpent} HBAR of ${config.maxSpendHbar} cap`);

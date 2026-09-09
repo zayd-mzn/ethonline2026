@@ -1,12 +1,15 @@
 /**
  * Service registry — SQLite-backed store of marketplace services.
  *
- * Uses better-sqlite3 (synchronous), so the public function signatures are
- * unchanged from the in-memory version — callers (index.ts, payment gate)
- * need no changes. The DB file lives at backend/data/registry.db (gitignored).
+ * Uses Node.js built-in `node:sqlite` (available Node 22+) instead of
+ * better-sqlite3, so no native binary build is required. The public function
+ * signatures are identical — callers (index.ts, payment gate) are unchanged.
+ * The DB file lives at backend/data/registry.db (gitignored).
  */
 
-import Database from "better-sqlite3";
+// node:sqlite is experimental in Node 22/24 — suppress the warning in prod
+// by setting NODE_NO_WARNINGS=1, but it works fine for our purposes.
+import { DatabaseSync } from "node:sqlite";
 import { randomUUID } from "node:crypto";
 import { mkdirSync } from "node:fs";
 import { dirname } from "node:path";
@@ -17,8 +20,8 @@ const DB_PATH = process.env.DB_PATH ?? "data/registry.db";
 // Ensure the data/ directory exists before opening the file.
 mkdirSync(dirname(DB_PATH), { recursive: true });
 
-const db = new Database(DB_PATH);
-db.pragma("journal_mode = WAL");
+const db = new DatabaseSync(DB_PATH);
+db.exec("PRAGMA journal_mode = WAL");
 
 // Create the table on first run.
 db.exec(`
@@ -36,7 +39,7 @@ db.exec(`
 
 /** List all services (discovery). */
 export function listServices(): Service[] {
-  return db.prepare("SELECT * FROM services").all() as Service[];
+  return db.prepare("SELECT * FROM services").all() as unknown as Service[];
 }
 
 /** Get one service by id. */
@@ -48,9 +51,9 @@ export function getService(id: string): Service | undefined {
 
 /** Find a service by its endpoint path (used by the payment gate to price a request). */
 export function getServiceByEndpoint(endpoint: string): Service | undefined {
-  return db.prepare("SELECT * FROM services WHERE endpoint = ?").get(endpoint) as
-    | Service
-    | undefined;
+  return db
+    .prepare("SELECT * FROM services WHERE endpoint = ?")
+    .get(endpoint) as Service | undefined;
 }
 
 /** Create and store a new service. */
@@ -70,15 +73,15 @@ export function createService(
   };
   db.prepare(
     `INSERT INTO services (id, name, description, endpoint, queryType, priceHbar, providerId, createdAt)
-     VALUES (@id, @name, @description, @endpoint, @queryType, @priceHbar, @providerId, @createdAt)`,
-  ).run(service);
+     VALUES (:id, :name, :description, :endpoint, :queryType, :priceHbar, :providerId, :createdAt)`,
+  ).run(service as unknown as Record<string, string | number>);
   return service;
 }
 
 /** Seed sample services only if the table is empty (idempotent across restarts). */
 export function seedServices(): void {
-  const count = (db.prepare("SELECT COUNT(*) AS n FROM services").get() as { n: number }).n;
-  if (count > 0) return;
+  const row = db.prepare("SELECT COUNT(*) AS n FROM services").get() as { n: number };
+  if (row.n > 0) return;
 
   createService(
     {

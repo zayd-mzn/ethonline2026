@@ -7,13 +7,13 @@
  */
 
 import Fastify from "fastify";
-import { listServices, seedServices, createService } from "./registry.js";
-import type { ServicesListResponse,CreateServiceRequest, TriageRequest } from "./types.js";
+import { listServices, seedServices, createService, getServiceByEndpoint } from "./registry.js";
+import type { ServicesListResponse, CreateServiceRequest, TriageRequest } from "./types.js";
 import { worldIdentity } from "./identity.js";
 import { lookupIpReputation, checkHash } from "./intel.js";
 import { triage } from "./triage.js";
-import { paymentGate } from "./paymentGate.stub.js";
-import { getServiceByEndpoint } from "./registry.js";
+import { paymentGate } from "./paymentGate.js";
+import { initHcsTopic, getTopicId } from "./hcsLogger.js";
 
 const PORT = Number(process.env.PORT ?? 3001);
 const HOST = process.env.HOST ?? "0.0.0.0";
@@ -23,7 +23,14 @@ const app = Fastify({
 });
 
 app.get("/health", async () => {
-  return { status: "ok", service: "cyber-intel-backend" };
+  return {
+    status: "ok",
+    service: "cyber-intel-backend",
+    hcsTopicId: getTopicId(),
+    hcsHashScan: getTopicId()
+      ? `https://hashscan.io/testnet/topic/${getTopicId()}`
+      : null,
+  };
 });
 
 // Discovery: agents and the frontend call this to see available services.
@@ -114,6 +121,7 @@ app.post("/api/triage", async (request, reply) => {
 async function main(): Promise<void> {
   try {
     seedServices();                       // populate registry before serving
+    await initHcsTopic();                 // create HCS audit topic on Hedera
     await app.listen({ port: PORT, host: HOST });
   } catch (err) {
     app.log.error(err);

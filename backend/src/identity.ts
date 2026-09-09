@@ -61,7 +61,7 @@ async function verifySelfieCheckProof(proofString: string): Promise<{ success: b
 
     const result = (await response.json()) as { success?: boolean };
     
-    if (result.success) {
+    if (result["success"]) {
       return { 
         success: true, 
         nullifier_hash: proof.nullifier_hash 
