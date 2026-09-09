@@ -1,16 +1,22 @@
 /**
  * Cyber Intel Marketplace — AI Agent (Member 3)
  *
- * Entry point. Wires the Phase 2 building blocks: config, activity emitter,
- * service discovery, budget guard, and Hedera wallet. The full
- * discover -> pick -> pay -> consume -> report loop lands in Phase 3.
+ * Entry point. Runs the full loop: discover -> pick -> pay -> consume ->
+ * report over a set of indicators (the demo scenario "investigate N
+ * indicators"). Payment currently uses StubPaymentClient; the real
+ * Hedera-backed client swaps in behind the PaymentClient seam later.
  */
 
 import { ActivityEmitter, consoleLogger } from "./activity.js";
 import { Budget } from "./budget.js";
 import { loadConfig } from "./config.js";
-import { DiscoveryClient } from "./discovery.js";
+import { investigate } from "./loop.js";
+import { StubPaymentClient } from "./payment.js";
+import { formatReport } from "./report.js";
 import { Wallet } from "./wallet.js";
+
+/** Default indicators used when none are passed on the command line. */
+const DEMO_INDICATORS = ["1.2.3.4", "8.8.8.8", "44d88612fea8a8f36de82e1278abb02f"];
 
 async function main(): Promise<void> {
   const config = loadConfig();
@@ -21,23 +27,7 @@ async function main(): Promise<void> {
   const budget = new Budget(config.maxSpendHbar);
   console.log(`budget: ${budget.remaining} HBAR available`);
 
-  // Discovery — list services from the backend.
-  const discovery = new DiscoveryClient({
-    backendUrl: config.backendUrl,
-    emitter,
-  });
-  try {
-    const services = await discovery.listServices();
-    for (const s of services) {
-      console.log(`  - ${s.name} (${s.queryType}) @ ${s.priceHbar} HBAR`);
-    }
-  } catch (err) {
-    console.warn(
-      `discovery skipped: ${err instanceof Error ? err.message : String(err)}`,
-    );
-  }
-
-  // Wallet — initialize and confirm connectivity by reading balance.
+  // Optional wallet connectivity check (does not block the loop if it fails).
   let wallet: Wallet | undefined;
   try {
     wallet = Wallet.init(config);
@@ -46,6 +36,26 @@ async function main(): Promise<void> {
   } catch (err) {
     console.warn(
       `wallet check skipped: ${err instanceof Error ? err.message : String(err)}`,
+    );
+  }
+
+  // Indicators from CLI args, or the demo set.
+  const indicators = process.argv.slice(2);
+  const targets = indicators.length > 0 ? indicators : DEMO_INDICATORS;
+  console.log(`investigating ${targets.length} indicator(s): ${targets.join(", ")}`);
+
+  try {
+    const report = await investigate(targets, {
+      backendUrl: config.backendUrl,
+      emitter,
+      budget,
+      payment: new StubPaymentClient(),
+    });
+    console.log("\n" + formatReport(report));
+    console.log(`\nspent ${budget.totalSpent} HBAR of ${config.maxSpendHbar} cap`);
+  } catch (err) {
+    console.error(
+      `investigation failed: ${err instanceof Error ? err.message : String(err)}`,
     );
   } finally {
     wallet?.close();
