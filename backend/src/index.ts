@@ -121,7 +121,16 @@ app.post("/api/triage", async (request, reply) => {
 async function main(): Promise<void> {
   try {
     seedServices();                       // populate registry before serving
-    await initHcsTopic();                 // create HCS audit topic on Hedera
+    // Create the HCS audit topic. Non-fatal: if Hedera credentials are absent
+    // (e.g. local dev) or the network is unreachable, log and continue serving
+    // so the API still works. Payment settlement will still fail loudly per-request.
+    try {
+      await initHcsTopic();
+    } catch (err) {
+      app.log.warn(
+        `HCS audit disabled: ${err instanceof Error ? err.message : String(err)}`,
+      );
+    }
     await app.listen({ port: PORT, host: HOST });
   } catch (err) {
     app.log.error(err);
