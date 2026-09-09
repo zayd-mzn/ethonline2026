@@ -84,8 +84,10 @@ export interface IdentityVerifier {
   resolveAgentBacking(agentId: string): Promise<boolean>;
 }
 
-/** Member 1 — payments. Options the payment gate needs per protected route. */
+/** Member 1 — payments. Options the payment gate needs per protected route.
+ *  Price is resolved from the registry (single source of truth) at request
+ *  time via lookupPrice, keyed by the route's resource path. */
 export interface PaymentGateOptions {
-  priceHbar: number;
-  resource: string;
+  resource: string;                                       // endpoint path, e.g. "/api/ip-reputation"
+  lookupPrice: (resource: string) => number | undefined;  // returns priceHbar from the registry
 }

@@ -12,6 +12,10 @@
  *   - 402 body:  { error: "payment_required", payment: PaymentRequirement }
  *   - proof header: "x-payment-proof"
  *   - stub proof value: "stub-proof:<requestId>"
+ *
+ * Price is resolved from the registry (single source of truth) via the
+ * injected lookupPrice function, so changing a service's priceHbar changes
+ * what the gate charges with no code edit.
  */
 
 import type { FastifyReply, FastifyRequest } from "fastify";
@@ -35,17 +39,24 @@ function expectedStubProof(requestId: string): string {
  * Behaviour:
  *   - No/invalid x-payment-proof header  -> reply 402 with PaymentRequirement.
  *   - Valid stub proof                   -> return (let the route handler run).
+ *   - Route not found in the registry    -> reply 500 (misconfigured gate).
  *
  * The requestId is embedded in both the 402 requirement and the expected proof,
  * so a proof only satisfies the specific request it was issued for.
  */
 export function paymentGate(options: PaymentGateOptions) {
   return async function (request: FastifyRequest, reply: FastifyReply): Promise<void> {
+    // Price comes from the registry — single source of truth.
+    const price = options.lookupPrice(options.resource);
+    if (price === undefined) {
+      await reply.code(500).send({
+        error: "misconfigured_gate",
+        message: `No registered service for ${options.resource}`,
+      });
+      return;
+    }
+
     const proof = request.headers[PAYMENT_PROOF_HEADER];
-
-    // Reconstruct the resource (path + query) for the requirement / audit.
-    const resource = options.resource || request.url;
-
     if (typeof proof === "string") {
       // Extract the requestId the proof claims to satisfy and validate it.
       const requestId = proof.startsWith("stub-proof:")
@@ -63,11 +74,11 @@ export function paymentGate(options: PaymentGateOptions) {
     const payload: PaymentRequiredResponse = {
       error: "payment_required",
       payment: {
-        amountHbar: options.priceHbar,
+        amountHbar: price,
         recipient: STUB_RECIPIENT,
         facilitator: "blocky402",
         requestId,
-        resource,
+        resource: options.resource,
       },
     };
     await reply.code(402).send(payload);
