@@ -22,6 +22,7 @@
   },
   "dependencies": {
     "@hashgraph/sdk": "^2.81.0",
+    "@x402/hedera": "^2.25.0",
     "hedera-agent-kit": "^3.8.2"
   }
 }

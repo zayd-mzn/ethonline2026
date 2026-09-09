@@ -1,84 +1,162 @@
 /**
- * Payment path — the seam for Member 1's real Hedera payment implementation.
+ * Payment path — Member 1 (Hedera & Payments).
  *
- * The agent codes against the PaymentClient interface. A stub is provided so
- * the full 402 -> pay -> retry flow works end-to-end before M1's real path
- * lands (mirrors backend/src/identity.stub.ts). The real implementation
- * (actual HBAR transfer via the wallet) swaps in without changing callers.
+ * Implements the x402 v2 payment flow using @x402/hedera and the hosted
+ * Blocky402 facilitator (https://api.testnet.blocky402.com).
+ *
+ * Flow:
+ *   1. Build PaymentRequirements from the 402 body (already correct shape).
+ *   2. Sign a TransferTransaction with ExactHederaScheme (creates payload).
+ *   3. POST /verify to the facilitator — confirms the payload is valid.
+ *   4. POST /settle to the facilitator — co-signs and submits to Hedera.
+ *   5. Return the base64-encoded paymentPayload as proof.
+ *      Backend gate receives it in X-PAYMENT header and verifies via /verify.
+ *
+ * Proof format (wire):  base64(JSON(paymentPayload))
+ * Header name:          X-PAYMENT  (x402 v2 standard)
  */
 
 import {
-  AccountId,
-  Hbar,
-  TransferTransaction,
-} from "@hashgraph/sdk";
-import type { Wallet } from "./wallet.js";
+  ExactHederaScheme,
+  createClientHederaSigner,
+  PrivateKey,
+  HBAR_ASSET_ID,
+  HEDERA_TESTNET_CAIP2,
+  type ExactHederaPayloadV2,
+} from "@x402/hedera";
+import type { PaymentRequirements } from "@x402/core/types";
 import type { PaymentRequirement } from "./types.js";
+import type { Wallet } from "./wallet.js";
+
+const BLOCKY402_URL =
+  process.env.BLOCKY402_URL ?? "https://api.testnet.blocky402.com";
+
+/** The facilitator's fee-payer account (from GET /supported, hedera:testnet). */
+const BLOCKY402_FEE_PAYER = "0.0.7162784";
+
+/** x402 v2 PaymentPayload shape (sent as base64 in X-PAYMENT header). */
+interface PaymentPayload {
+  x402Version: number;
+  scheme: "exact";
+  network: string;
+  accepted: PaymentRequirements;
+  payload: ExactHederaPayloadV2;
+}
 
 /** Result of settling a payment: a proof the backend can verify. */
 export interface PaymentProof {
-  /** Opaque proof string sent back to the gated endpoint. */
+  /** base64(JSON(paymentPayload)) — sent as X-PAYMENT header. */
   proof: string;
-  /** Optional on-chain transaction id, when a real payment was made. */
+  /** On-chain transaction id returned by the facilitator. */
   txId?: string;
 }
 
-/** Member 1 — payments. Settles a 402 requirement and returns a proof. */
+/** PaymentClient interface — the seam M3's loop codes against. */
 export interface PaymentClient {
   pay(requirement: PaymentRequirement): Promise<PaymentProof>;
 }
 
 /**
- * DEV ONLY stub payment client. Does not move real funds; returns a
- * deterministic fake proof derived from the request id so the flow can be
- * exercised end-to-end. Swap for the real Hedera-backed client later.
+ * DEV ONLY stub — no real funds move. Kept so local dev works without
+ * Hedera credentials. Swap for Blocky402HederaPaymentClient in production.
  */
 export class StubPaymentClient implements PaymentClient {
   async pay(requirement: PaymentRequirement): Promise<PaymentProof> {
-    const txId = `stub-tx-${requirement.requestId}`;
-    return { proof: `stub-proof:${requirement.requestId}`, txId };
+    return {
+      proof: `stub-proof:${requirement.requestId}`,
+      txId: `stub-tx-${requirement.requestId}`,
+    };
   }
 }
 
 /**
- * Real Hedera payment client.
+ * Real x402 v2 Blocky402 payment client for Hedera testnet.
  *
- * Transfers requirement.amountHbar from the agent wallet to the recipient
- * account, waits for consensus, and returns the transaction ID as the proof.
- *
- * Proof format:  "hedera-tx:<transactionId>"
- * The backend gate parses this, queries the ledger, and verifies the transfer
- * actually settled for at least the expected amount to the expected recipient.
+ * Uses @x402/hedera ExactHederaScheme to sign a TransferTransaction,
+ * then calls the Blocky402 facilitator to verify and settle it.
+ * The settled paymentPayload is base64-encoded and returned as the proof.
+ * The backend gate decodes it and calls /verify to confirm.
  */
-export class HederaPaymentClient implements PaymentClient {
+export class Blocky402HederaPaymentClient implements PaymentClient {
   constructor(private readonly wallet: Wallet) {}
 
   async pay(requirement: PaymentRequirement): Promise<PaymentProof> {
-    const recipient = AccountId.fromString(requirement.recipient);
+    // 1. Convert amountHbar → tinybars string (x402 v2 uses smallest unit)
+    const tinybars = String(Math.round(requirement.amountHbar * 100_000_000));
 
-    // Convert HBAR to tinybars (1 HBAR = 100,000,000 tinybars)
-    const tinybars = Math.round(requirement.amountHbar * 100_000_000);
-    const amount = Hbar.fromTinybars(tinybars);
+    const paymentRequirements: PaymentRequirements = {
+      scheme: "exact",
+      network: HEDERA_TESTNET_CAIP2,
+      amount: tinybars,
+      payTo: requirement.recipient,
+      maxTimeoutSeconds: 300,
+      asset: HBAR_ASSET_ID,           // "0.0.0" = native HBAR
+      extra: { feePayer: BLOCKY402_FEE_PAYER },
+    };
+    const rawKey = process.env.HEDERA_PRIVATE_KEY ?? "";
+    const signer = createClientHederaSigner(
+      this.wallet.accountId.toString(),
+      PrivateKey.fromStringECDSA(
+        rawKey.startsWith("0x") ? rawKey.slice(2) : rawKey,
+      ),
+      { network: HEDERA_TESTNET_CAIP2 },
+    );
 
-    // Build and execute the transfer transaction
-    const txResponse = await new TransferTransaction()
-      .addHbarTransfer(this.wallet.accountId, amount.negated())
-      .addHbarTransfer(recipient, amount)
-      .execute(this.wallet.client);
+    // 3. Sign the TransferTransaction (partial — facilitator co-signs as fee-payer)
+    const scheme = new ExactHederaScheme(signer);
+    const signed = await scheme.createPaymentPayload(2, paymentRequirements);
 
-    // Wait for consensus and confirm SUCCESS
-    const receipt = await txResponse.getReceipt(this.wallet.client);
+    const paymentPayload: PaymentPayload = {
+      x402Version: 2,
+      scheme: "exact",
+      network: HEDERA_TESTNET_CAIP2,
+      accepted: paymentRequirements,
+      payload: signed.payload as ExactHederaPayloadV2,
+    };
 
-    if (receipt.status.toString() !== "SUCCESS") {
+    const body = {
+      x402Version: 2,
+      paymentPayload,
+      paymentRequirements,
+    };
+
+    // 4. Verify with facilitator
+    const verifyRes = await fetch(`${BLOCKY402_URL}/verify`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+    const verify = (await verifyRes.json()) as {
+      isValid?: boolean;
+      invalidMessage?: string;
+      invalidReason?: string;
+    };
+    if (!verify.isValid) {
       throw new Error(
-        `Payment transaction failed with status: ${receipt.status.toString()}`,
+        `Blocky402 verify failed: ${verify.invalidMessage ?? verify.invalidReason ?? "unknown"}`,
       );
     }
 
-    const txId = txResponse.transactionId.toString();
-    return {
-      proof: `hedera-tx:${txId}`,
-      txId,
+    // 5. Settle with facilitator (co-signs + submits to Hedera)
+    const settleRes = await fetch(`${BLOCKY402_URL}/settle`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+    const settle = (await settleRes.json()) as {
+      success?: boolean;
+      transaction?: string;
+      errorMessage?: string;
+      errorReason?: string;
     };
+    if (!settle.success) {
+      throw new Error(
+        `Blocky402 settle failed: ${settle.errorMessage ?? settle.errorReason ?? "unknown"}`,
+      );
+    }
+
+    // 6. Encode payload as base64 — this is the proof sent to the backend
+    const proof = Buffer.from(JSON.stringify(paymentPayload)).toString("base64");
+    return { proof, txId: settle.transaction };
   }
 }

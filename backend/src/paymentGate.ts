@@ -1,94 +1,99 @@
 /**
- * Real payment gate — Member 1 deliverable.
+ * Real x402 v2 payment gate — Member 1 deliverable.
  *
  * Replaces paymentGate.stub.ts. Same Fastify preHandler signature so the
- * swap in index.ts is a one-line import change.
+ * swap in index.ts stays a one-line import change.
  *
- * Flow:
- *   1. Request arrives with no x-payment-proof header → reply 402 with
- *      PaymentRequiredResponse (amount from registry, real treasury recipient).
- *   2. Request arrives with x-payment-proof: hedera-tx:<txId> → query the
- *      Hedera ledger to confirm the transfer settled for at least the expected
- *      amount to the treasury account.
- *   3. Verified → write HCS audit entry (fire-and-forget) → let route run.
- *   4. Invalid proof → reply 402 again (fresh requestId).
+ * Wire protocol (x402 v2):
+ *   - 402 body shape:  { x402Version: 2, accepts: [PaymentRequirements] }
+ *   - Payment header:  X-PAYMENT: <base64(JSON(paymentPayload))>
+ *   - Facilitator:     Blocky402 (https://api.testnet.blocky402.com)
  *
- * Proof format agreed with the agent (agent/src/payment.ts):
- *   "hedera-tx:<transactionId>"
- *   e.g. "hedera-tx:0.0.10446789@1234567890.000000000"
+ * On every request:
+ *   1. No X-PAYMENT header → reply 402 with x402 v2 PaymentRequirements.
+ *   2. X-PAYMENT present → base64-decode → POST /verify to Blocky402.
+ *   3. isValid → write HCS audit log (fire-and-forget) → let route run.
+ *   4. !isValid → reply 402 again (fresh requirements).
+ *
+ * NOTE: We verify only (not re-settle) on the server side. The agent already
+ * settled with Blocky402; the server just confirms the proof is valid before
+ * releasing the data. This matches the x402 v2 resource-server pattern.
  */
 
 import type { FastifyReply, FastifyRequest } from "fastify";
 import { randomUUID } from "node:crypto";
-import {
-  AccountId,
-  TransactionId,
-  TransactionRecordQuery,
-} from "@hashgraph/sdk";
-import { getHederaClient } from "./hederaClient.js";
 import { logPayment } from "./hcsLogger.js";
 import type { PaymentGateOptions, PaymentRequiredResponse } from "./types.js";
 
-/** Header name shared with the agent — must never change. */
-export const PAYMENT_PROOF_HEADER = "x-payment-proof";
+/** Header name per x402 v2 spec. */
+export const PAYMENT_PROOF_HEADER = "x-payment";
 
-/** Treasury account that receives payments. Set in HEDERA_RECIPIENT env var. */
+/** Blocky402 facilitator base URL. */
+const BLOCKY402_URL =
+  process.env.BLOCKY402_URL ?? "https://api.testnet.blocky402.com";
+
+/** Treasury account — receives HBAR payments. */
 const RECIPIENT = process.env.HEDERA_RECIPIENT ?? "0.0.STUB";
 
-/** 1% tolerance for tinybar rounding when comparing transfer amounts. */
-const AMOUNT_TOLERANCE = 0.99;
+/** Blocky402 fee-payer for Hedera testnet (from GET /supported). */
+const BLOCKY402_FEE_PAYER = "0.0.7162784";
 
-/**
- * Parse "hedera-tx:<txId>" from the proof header.
- * Returns the raw transaction id string, or null if the format is wrong.
- */
-function parseTxId(proof: string): string | null {
-  if (!proof.startsWith("hedera-tx:")) return null;
-  const txId = proof.slice("hedera-tx:".length).trim();
-  return txId.length > 0 ? txId : null;
+/** x402 v2 PaymentRequirements shape (what goes inside the 402 body). */
+interface X402PaymentRequirements {
+  scheme: "exact";
+  network: string;
+  amount: string;          // tinybars as string
+  payTo: string;
+  maxTimeoutSeconds: number;
+  asset: string;
+  extra: { feePayer: string };
+  resource: string;        // extra field so agent/frontend can identify the service
+  description?: string;
 }
 
 /**
- * Query the Hedera ledger and verify that txId transferred at least
- * expectedAmountHbar to expectedRecipient.
- *
- * Returns { valid: true, payer } on success, { valid: false, payer: "" } on
- * any failure (network error, wrong amount, wrong recipient, etc.).
+ * Decode X-PAYMENT header (base64 JSON) and call Blocky402 /verify.
+ * Returns { valid, payer } or { valid: false } on any failure.
  */
-async function verifyTransfer(
-  txIdStr: string,
-  expectedRecipient: string,
-  expectedAmountHbar: number,
+async function verifyX402Payment(
+  xPaymentHeader: string,
+  requirements: X402PaymentRequirements,
 ): Promise<{ valid: boolean; payer: string }> {
   try {
-    const client = getHederaClient();
-    const txId = TransactionId.fromString(txIdStr);
+    const paymentPayload = JSON.parse(
+      Buffer.from(xPaymentHeader, "base64").toString("utf8"),
+    ) as unknown;
 
-    const record = await new TransactionRecordQuery()
-      .setTransactionId(txId)
-      .execute(client);
+    const body = {
+      x402Version: 2,
+      paymentPayload,
+      paymentRequirements: requirements,
+    };
 
-    const recipientId = AccountId.fromString(expectedRecipient);
-    const tinybarsExpected = Math.round(expectedAmountHbar * 100_000_000);
+    const res = await fetch(`${BLOCKY402_URL}/verify`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+      signal: AbortSignal.timeout(8000),
+    });
 
-    // Walk the transfer list looking for a credit to the treasury account
-    for (const transfer of record.transfers) {
-      if (transfer.accountId.toString() === recipientId.toString()) {
-        // hbar value is positive for credits, negative for debits
-        const tinybarsReceived = transfer.amount.toBigNumber().toNumber() * 100_000_000;
-        if (tinybarsReceived >= tinybarsExpected * AMOUNT_TOLERANCE) {
-          // Payer = the account that signed the transaction
-          const payer = txId.accountId?.toString() ?? "unknown";
-          return { valid: true, payer };
-        }
-      }
+    const result = (await res.json()) as {
+      isValid?: boolean;
+      payer?: string;
+      invalidMessage?: string;
+    };
+
+    if (result.isValid) {
+      return { valid: true, payer: result.payer ?? "unknown" };
     }
 
-    // No matching credit found
+    console.warn(
+      `Blocky402 verify rejected: ${result.invalidMessage ?? "no reason"}`,
+    );
     return { valid: false, payer: "" };
   } catch (err) {
     console.error(
-      "Payment verification error:",
+      "Blocky402 verify error:",
       err instanceof Error ? err.message : String(err),
     );
     return { valid: false, payer: "" };
@@ -96,10 +101,28 @@ async function verifyTransfer(
 }
 
 /**
- * Create a Fastify preHandler that gates a route behind x402 payment.
- *
- * Drop-in replacement for paymentGate.stub — same function signature and
- * same 402 body shape. index.ts only needs the import line changed.
+ * Build x402 v2 PaymentRequirements for a given resource and price.
+ * Tinybars = amountHbar × 100_000_000.
+ */
+function buildRequirements(
+  resource: string,
+  amountHbar: number,
+): X402PaymentRequirements {
+  return {
+    scheme: "exact",
+    network: "hedera:testnet",
+    amount: String(Math.round(amountHbar * 100_000_000)),
+    payTo: RECIPIENT,
+    maxTimeoutSeconds: 300,
+    asset: "0.0.0",             // native HBAR
+    extra: { feePayer: BLOCKY402_FEE_PAYER },
+    resource,
+  };
+}
+
+/**
+ * Create a Fastify preHandler that gates a route behind x402 v2 payment.
+ * Drop-in replacement for paymentGate.stub — same function signature.
  */
 export function paymentGate(options: PaymentGateOptions) {
   return async function (
@@ -116,41 +139,46 @@ export function paymentGate(options: PaymentGateOptions) {
       return;
     }
 
-    const proofHeader = request.headers[PAYMENT_PROOF_HEADER];
+    const requirements = buildRequirements(options.resource, price);
+    const xPayment = request.headers[PAYMENT_PROOF_HEADER];
 
-    if (typeof proofHeader === "string") {
-      const txId = parseTxId(proofHeader);
+    if (typeof xPayment === "string" && xPayment.length > 0) {
+      const { valid, payer } = await verifyX402Payment(xPayment, requirements);
 
-      if (txId) {
-        const { valid, payer } = await verifyTransfer(txId, RECIPIENT, price);
-
-        if (valid) {
-          // ✅ Payment verified on-chain — write HCS audit record and proceed.
-          logPayment({
-            requestId: `req_${randomUUID().slice(0, 8)}`,
-            resource: options.resource,
-            amountHbar: price,
-            payer,
-            txId,
-            timestamp: new Date().toISOString(),
-          });
-          return; // let the route handler run
-        }
+      if (valid) {
+        // ✅ Payment verified by Blocky402 — write HCS audit and proceed.
+        logPayment({
+          requestId: `req_${randomUUID().slice(0, 8)}`,
+          resource: options.resource,
+          amountHbar: price,
+          payer,
+          txId: xPayment.slice(0, 32) + "…", // truncated proof for log
+          timestamp: new Date().toISOString(),
+        });
+        return; // let the route handler run
       }
     }
 
-    // No valid payment — issue a fresh 402 requirement.
+    // No valid payment — issue x402 v2 requirements.
+    // We also send the legacy PaymentRequiredResponse shape in parallel so
+    // the existing agent code (paid-request.ts) can still parse it.
     const requestId = `req_${randomUUID().slice(0, 8)}`;
-    const payload: PaymentRequiredResponse = {
-      error: "payment_required",
+
+    // x402 v2 body
+    const x402Body = {
+      x402Version: 2,
+      accepts: [requirements],
+      // Legacy compat fields so the existing agent loop still works:
+      error: "payment_required" as const,
       payment: {
         amountHbar: price,
         recipient: RECIPIENT,
         facilitator: "blocky402",
         requestId,
         resource: options.resource,
-      },
+      } satisfies PaymentRequiredResponse["payment"],
     };
-    await reply.code(402).send(payload);
+
+    await reply.code(402).send(x402Body);
   };
 }

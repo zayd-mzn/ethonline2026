@@ -16,8 +16,8 @@ import type { FetchLike } from "./discovery.js";
 import type { PaymentClient } from "./payment.js";
 import type { PaymentRequiredResponse, PaymentRequirement } from "./types.js";
 
-/** Header the agent uses to return payment proof to the gated endpoint. */
-export const PAYMENT_PROOF_HEADER = "x-payment-proof";
+/** Header the agent uses to return payment proof — x402 v2 standard. */
+export const PAYMENT_PROOF_HEADER = "x-payment";
 
 export interface PaidRequestOptions {
   emitter: ActivityEmitter;
