@@ -12,7 +12,7 @@ import type { Service, ServicesListResponse } from "./types.js";
 /** Minimal fetch signature so tests can inject a stub. */
 export type FetchLike = (
   input: string,
-  init?: { signal?: AbortSignal },
+  init?: { signal?: AbortSignal; headers?: Record<string, string> },
 ) => Promise<{
   ok: boolean;
   status: number;
