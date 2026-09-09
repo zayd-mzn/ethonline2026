@@ -21,7 +21,11 @@ export interface AgentConfig {
   backendUrl: string;
   maxSpendHbar: number;
   eventStreamPort: number;
+  paymentMode: PaymentMode;
 }
+
+/** How the agent settles payments. */
+export type PaymentMode = "stub" | "real";
 
 /**
  * Minimal .env loader (no external dependency). Parses KEY=VALUE lines,
@@ -86,6 +90,13 @@ function parsePort(name: string, value: string): number {
   return n;
 }
 
+function parsePaymentMode(value: string): PaymentMode {
+  if (value === "stub" || value === "real") return value;
+  throw new Error(
+    `Invalid PAYMENT_MODE "${value}" (expected stub | real)`,
+  );
+}
+
 /** Load, validate, and return the agent configuration. */
 export function loadConfig(): AgentConfig {
   loadDotEnv();
@@ -106,5 +117,8 @@ export function loadConfig(): AgentConfig {
       "EVENT_STREAM_PORT",
       process.env.EVENT_STREAM_PORT ?? "3002",
     ),
+    // Default to "stub" so local/demo runs work without real funds. Set
+    // PAYMENT_MODE=real to settle on-chain via Blocky402.
+    paymentMode: parsePaymentMode(process.env.PAYMENT_MODE ?? "stub"),
   };
 }

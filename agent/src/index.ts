@@ -68,11 +68,18 @@ async function main(): Promise<void> {
   console.log(`investigating ${targets.length} indicator(s): ${targets.join(", ")}`);
 
   try {
+    const usingReal = config.paymentMode === "real" && wallet;
+    const payment = usingReal
+      ? new Blocky402HederaPaymentClient(wallet!)
+      : new StubPaymentClient();
+    console.log(
+      `payment mode: ${usingReal ? "real (Blocky402 on-chain)" : "stub (no funds moved)"}`,
+    );
     const report = await investigate(targets, {
       backendUrl: config.backendUrl,
       emitter,
       budget,
-      payment: wallet ? new Blocky402HederaPaymentClient(wallet) : new StubPaymentClient(),
+      payment,
     });
     console.log("\n" + formatReport(report));
     console.log(`\nspent ${budget.totalSpent} HBAR of ${config.maxSpendHbar} cap`);
