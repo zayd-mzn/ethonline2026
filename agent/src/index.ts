@@ -15,6 +15,7 @@ import { investigate } from "./loop.js";
 import { StubPaymentClient } from "./payment.js";
 import { formatReport } from "./report.js";
 import { Wallet } from "./wallet.js";
+import { registerAgent, verifyAgentBacking } from "./agent-identity.js";
 
 /** Default indicators used when none are passed on the command line. */
 const DEMO_INDICATORS = ["1.2.3.4", "8.8.8.8", "44d88612fea8a8f36de82e1278abb02f"];
@@ -38,6 +39,16 @@ async function main(): Promise<void> {
 
   const budget = new Budget(config.maxSpendHbar);
   console.log(`budget: ${budget.remaining} HBAR available`);
+
+  // Register agent identity with World ID
+  const agentIdentity = await registerAgent(config.hederaAccountId);
+  console.log(`agent registered: ${agentIdentity.agentId} (human-backed: ${agentIdentity.isHumanBacked})`);
+  
+  // Verify agent backing with backend
+  const isVerified = await verifyAgentBacking(agentIdentity.agentId, config.backendUrl);
+  if (!isVerified) {
+    console.warn("⚠️  agent not verified as human-backed; some operations may be restricted");
+  }
 
   // Optional wallet connectivity check (does not block the loop if it fails).
   let wallet: Wallet | undefined;

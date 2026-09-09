@@ -1,0 +1,79 @@
+# Dependencies
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+package-lock.json
+
+# Environment variables (IMPORTANT: never commit secrets!)
+.env
+.env.local
+.env.*.local
+.env.production
+.env.development
+
+# Build outputs
+dist/
+build/
+out/
+*.tsbuildinfo
+
+# Database files
+*.sqlite
+*.sqlite3
+*.db
+*.db-wal
+*.db-shm
+data/
+
+# IDE / Editor
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Logs
+*.log
+logs/
+
+# Testing
+coverage/
+.nyc_output/
+
+# Temporary files
+tmp/
+temp/
+*.tmp
+
+# OS files
+Thumbs.db
+.DS_Store
+
+# Hedera / Blockchain
+*.pem
+*.key
+wallet/
+
+# World ID (if storing proofs locally - do NOT commit!)
+proofs/
+verification-cache/
+
+# Vite
+.vite/
+
+# Contract artifacts
+artifacts/
+cache/
+typechain/
+typechain-types/
+
+# Documentation builds
+docs/build/
+docs/.vuepress/dist/
+
+# Progress and implementation documentation (ignore all .md except the handoff file)
+*.md
+!MEMBER_4_FINAL_PROGRESS.md
