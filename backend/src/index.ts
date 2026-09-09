@@ -9,7 +9,7 @@
 import Fastify from "fastify";
 import { listServices, seedServices, createService } from "./registry.js";
 import type { ServicesListResponse,CreateServiceRequest } from "./types.js";
-import { stubIdentity } from "./identity.stub.js";
+import { worldIdentity } from "./identity.js";
 import { lookupIpReputation, checkHash } from "./intel.js";
 import { paymentGate } from "./paymentGate.stub.js";
 import { getServiceByEndpoint } from "./registry.js";
@@ -40,7 +40,7 @@ app.post("/marketplace/services", async (request,reply) => {
         });
     }
 
-    const verified = await stubIdentity.verifySelfieCheck(proof);
+    const verified = await worldIdentity.verifySelfieCheck(proof);
     if (!verified) {
         return reply.code(401).send({
             error: "unauthorized",
