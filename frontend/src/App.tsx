@@ -266,7 +266,7 @@ function App() {
         <div className={`mt-auto mx-2 mb-4 rounded-lg border border-[#1d3029] bg-[#0d1915] ${collapsed ? "p-2" : "p-4"}`}>
           {collapsed
             ? <div className="grid place-items-center"><i className="h-2 w-2 animate-pulse rounded-full bg-[#b8f34b] shadow-[0_0_8px_#b8f34b]" /></div>
-            : <><div className="flex items-center gap-2 text-[9px] font-bold tracking-[.12em] text-[#55e6c2]"><i className="h-1.5 w-1.5 animate-pulse rounded-full bg-[#b8f34b] shadow-[0_0_8px_#b8f34b]" />HEDERA TESTNET</div><strong className="mt-3 block font-mono text-xs">0.0.845921</strong><small className="mt-1 block text-[9px] text-[#82988f]">Agent {agentOnline ? <span className="text-[#b8f34b]">● online</span> : <span className="text-[#ff6b6b]">● offline</span>}</small></>
+            : <><div className="flex items-center gap-2 text-[9px] font-bold tracking-[.12em] text-[#55e6c2]"><i className="h-1.5 w-1.5 animate-pulse rounded-full bg-[#b8f34b] shadow-[0_0_8px_#b8f34b]" />HEDERA TESTNET</div><strong className="mt-3 block font-mono text-xs">0.0.10446789</strong><small className="mt-1 block text-[9px] text-[#82988f]">Agent {agentOnline ? <span className="text-[#b8f34b]">● online</span> : <span className="text-[#ff6b6b]">● offline</span>}</small></>
           }
         </div>
       </aside>

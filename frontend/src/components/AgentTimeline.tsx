@@ -62,7 +62,7 @@ const NODES: NodeDef[] = [
       "Status":      "402 Payment Required",
       "Amount":      "0.010 HBAR",
       "Facilitator": "blocky402",
-      "Recipient":   "0.0.512390",
+      "Recipient":   "0.0.10446679",
     },
     code: `{
   "amountHbar": 0.010,
@@ -81,19 +81,19 @@ const NODES: NodeDef[] = [
     icon:        CheckCircle2,
     summary:     "Agent signed the transaction via Hedera Agent Kit. Network reached consensus in 2.8 s. Blocky402 verified settlement and released the data gate.",
     meta: {
-      "From":     "0.0.845921",
-      "To":       "0.0.512390",
+      "From":     "0.0.10446789",
+      "To":       "0.0.10446679",
       "Amount":   "0.010 HBAR",
       "Finality": "2.8 s",
-      "HCS Topic": "0.0.3901234",
+      "HCS Topic": "0.0.10449900",
     },
     code: `{
-  "transactionId": "0.0.845921@1788793122.441",
+  "transactionId": "0.0.10446789@1788994742.041874961",
   "status":        "SUCCESS",
-  "consensusAt":   "2026-09-07T18:58:26Z",
-  "hcsTopicId":    "0.0.3901234"
+  "consensusAt":   "2026-09-09T22:51:40Z",
+  "hcsTopicId":    "0.0.10449900"
 }`,
-    hashScanHref: "#", // wire in live HashScan URL once Member 1 provides testnet IDs
+    hashScanHref: "https://hashscan.io/testnet/topic/0.0.10449900",
   },
   {
     label:       "NODE 04",
