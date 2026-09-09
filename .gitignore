@@ -73,7 +73,3 @@ typechain-types/
 # Documentation builds
 docs/build/
 docs/.vuepress/dist/
-
-# Progress and implementation documentation (ignore all .md except the handoff file)
-*.md
-!MEMBER_4_FINAL_PROGRESS.md
