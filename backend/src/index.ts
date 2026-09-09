@@ -10,6 +10,7 @@ import Fastify from "fastify";
 import { listServices, seedServices, createService } from "./registry.js";
 import type { ServicesListResponse,CreateServiceRequest } from "./types.js";
 import { stubIdentity } from "./identity.stub.js";
+import { lookupIpReputation, checkHash } from "./intel.js";
 
 const PORT = Number(process.env.PORT ?? 3001);
 const HOST = process.env.HOST ?? "0.0.0.0";
@@ -62,6 +63,23 @@ app.post("/marketplace/services", async (request,reply) => {
     
     const service = createService(body, verified.providerId);
     return reply.code(201).send(service);
+});
+
+// Threat-intel services. These will be payment-gated by M1's paymentGate.
+app.get("/api/ip-reputation", async (request, reply) => {
+  const ip = (request.query as { ip?: string }).ip;
+  if (!ip) {
+    return reply.code(400).send({ error: "validation_error", message: "query param 'ip' is required" });
+  }
+  return lookupIpReputation(ip);
+});
+
+app.get("/api/hash-check", async (request, reply) => {
+  const hash = (request.query as { hash?: string }).hash;
+  if (!hash) {
+    return reply.code(400).send({ error: "validation_error", message: "query param 'hash' is required" });
+  }
+  return checkHash(hash);
 });
 
 async function main(): Promise<void> {
