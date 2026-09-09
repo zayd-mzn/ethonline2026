@@ -1,30 +1,56 @@
 /**
- * Service registry — the store of marketplace services.
+ * Service registry — SQLite-backed store of marketplace services.
  *
- * Starts as an in-memory store seeded with sample services so the
- * agent (M3) and frontend (M5) can integrate immediately. Swapped
- * for SQLite persistence in a later phase without changing this API.
+ * Uses better-sqlite3 (synchronous), so the public function signatures are
+ * unchanged from the in-memory version — callers (index.ts, payment gate)
+ * need no changes. The DB file lives at backend/data/registry.db (gitignored).
  */
 
+import Database from "better-sqlite3";
 import { randomUUID } from "node:crypto";
+import { mkdirSync } from "node:fs";
+import { dirname } from "node:path";
 import type { Service, CreateServiceRequest } from "./types.js";
 
-/** In-memory store. Keyed by service id. */
-const services = new Map<string, Service>();
+const DB_PATH = process.env.DB_PATH ?? "data/registry.db";
+
+// Ensure the data/ directory exists before opening the file.
+mkdirSync(dirname(DB_PATH), { recursive: true });
+
+const db = new Database(DB_PATH);
+db.pragma("journal_mode = WAL");
+
+// Create the table on first run.
+db.exec(`
+  CREATE TABLE IF NOT EXISTS services (
+    id          TEXT PRIMARY KEY,
+    name        TEXT NOT NULL,
+    description TEXT NOT NULL,
+    endpoint    TEXT NOT NULL,
+    queryType   TEXT NOT NULL,
+    priceHbar   REAL NOT NULL,
+    providerId  TEXT NOT NULL,
+    createdAt   TEXT NOT NULL
+  )
+`);
 
 /** List all services (discovery). */
 export function listServices(): Service[] {
-  return Array.from(services.values());
+  return db.prepare("SELECT * FROM services").all() as Service[];
 }
 
 /** Get one service by id. */
 export function getService(id: string): Service | undefined {
-  return services.get(id);
+  return db.prepare("SELECT * FROM services WHERE id = ?").get(id) as
+    | Service
+    | undefined;
 }
 
 /** Find a service by its endpoint path (used by the payment gate to price a request). */
 export function getServiceByEndpoint(endpoint: string): Service | undefined {
-  return Array.from(services.values()).find((s) => s.endpoint === endpoint);
+  return db.prepare("SELECT * FROM services WHERE endpoint = ?").get(endpoint) as
+    | Service
+    | undefined;
 }
 
 /** Create and store a new service. */
@@ -42,13 +68,17 @@ export function createService(
     providerId,
     createdAt: new Date().toISOString(),
   };
-  services.set(service.id, service);
+  db.prepare(
+    `INSERT INTO services (id, name, description, endpoint, queryType, priceHbar, providerId, createdAt)
+     VALUES (@id, @name, @description, @endpoint, @queryType, @priceHbar, @providerId, @createdAt)`,
+  ).run(service);
   return service;
 }
 
-/** Seed sample services so discovery is non-empty on boot. */
+/** Seed sample services only if the table is empty (idempotent across restarts). */
 export function seedServices(): void {
-  if (services.size > 0) return; // idempotent
+  const count = (db.prepare("SELECT COUNT(*) AS n FROM services").get() as { n: number }).n;
+  if (count > 0) return;
 
   createService(
     {
