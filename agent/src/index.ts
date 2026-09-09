@@ -10,6 +10,7 @@
 import { ActivityEmitter, consoleLogger } from "./activity.js";
 import { Budget } from "./budget.js";
 import { loadConfig } from "./config.js";
+import { EventStreamServer } from "./event-stream.js";
 import { investigate } from "./loop.js";
 import { StubPaymentClient } from "./payment.js";
 import { formatReport } from "./report.js";
@@ -23,6 +24,17 @@ async function main(): Promise<void> {
 
   const emitter = new ActivityEmitter();
   emitter.subscribe(consoleLogger);
+
+  // Expose the activity stream so the frontend monitor can consume live events.
+  const eventStream = new EventStreamServer({ emitter });
+  try {
+    const port = await eventStream.start(config.eventStreamPort);
+    console.log(`event stream on http://localhost:${port}/events (SSE)`);
+  } catch (err) {
+    console.warn(
+      `event stream disabled: ${err instanceof Error ? err.message : String(err)}`,
+    );
+  }
 
   const budget = new Budget(config.maxSpendHbar);
   console.log(`budget: ${budget.remaining} HBAR available`);
@@ -60,6 +72,16 @@ async function main(): Promise<void> {
   } finally {
     wallet?.close();
   }
+
+  // Keep the event stream alive after the run so the frontend can still read
+  // the final buffered events. Shut down cleanly on Ctrl-C.
+  console.log("run complete — event stream still serving (Ctrl-C to exit)");
+  const shutdown = async () => {
+    await eventStream.stop();
+    process.exit(0);
+  };
+  process.on("SIGINT", shutdown);
+  process.on("SIGTERM", shutdown);
 }
 
 main().catch((err) => {

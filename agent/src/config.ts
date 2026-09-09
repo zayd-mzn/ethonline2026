@@ -20,6 +20,7 @@ export interface AgentConfig {
   hederaNetwork: HederaNetwork;
   backendUrl: string;
   maxSpendHbar: number;
+  eventStreamPort: number;
 }
 
 /**
@@ -77,6 +78,14 @@ function parsePositiveNumber(name: string, value: string): number {
   return n;
 }
 
+function parsePort(name: string, value: string): number {
+  const n = Number(value);
+  if (!Number.isInteger(n) || n < 0 || n > 65535) {
+    throw new Error(`Invalid ${name} "${value}" (expected a port 0-65535)`);
+  }
+  return n;
+}
+
 /** Load, validate, and return the agent configuration. */
 export function loadConfig(): AgentConfig {
   loadDotEnv();
@@ -92,6 +101,10 @@ export function loadConfig(): AgentConfig {
     maxSpendHbar: parsePositiveNumber(
       "MAX_SPEND_HBAR",
       process.env.MAX_SPEND_HBAR ?? "1.0",
+    ),
+    eventStreamPort: parsePort(
+      "EVENT_STREAM_PORT",
+      process.env.EVENT_STREAM_PORT ?? "3002",
     ),
   };
 }
