@@ -136,20 +136,24 @@ time — changing a price requires no code edit, just a DB update.
 
 ### Backend (`backend/.env`)
 ```
-HEDERA_ACCOUNT_ID=0.0.10446679      # treasury account
-HEDERA_PRIVATE_KEY=0x...            # treasury private key (HEX or DER)
-HEDERA_RECIPIENT=0.0.10446679       # receives payments
+HEDERA_ACCOUNT_ID=0.0.10446679      # treasury / operator account
+HEDERA_PRIVATE_KEY=0x...            # operator private key (ECDSA HEX recommended)
+HEDERA_RECIPIENT=0.0.XXXXXXX        # receives payments — MUST differ from the payer/agent
 HEDERA_NETWORK=testnet
 BLOCKY402_URL=https://api.testnet.blocky402.com
 ```
+> ⚠️ `HEDERA_RECIPIENT` must be a different account from the agent's payer
+> account. If they match, the transfer nets to zero and Blocky402 rejects it
+> with `invalid_exact_hedera_payload_amount_mismatch`.
 
 ### Agent (`agent/.env`)
 ```
-HEDERA_ACCOUNT_ID=0.0.10446789      # agent wallet
-HEDERA_PRIVATE_KEY=0x...            # agent private key (HEX or DER)
+HEDERA_ACCOUNT_ID=0.0.10446789      # agent wallet (payer)
+HEDERA_PRIVATE_KEY=0x...            # agent private key (ECDSA HEX for real mode)
 HEDERA_NETWORK=testnet
 BLOCKY402_URL=https://api.testnet.blocky402.com
 MAX_SPEND_HBAR=1.0                  # spend cap per run
+PAYMENT_MODE=stub                   # "stub" (default) or "real" (on-chain settlement)
 ```
 
 ---
@@ -164,3 +168,67 @@ MAX_SPEND_HBAR=1.0                  # spend cap per run
 | `agent/src/payment.ts` | `Blocky402HederaPaymentClient` — signs + settles via Blocky402 |
 | `agent/src/paid-request.ts` | 402 → pay → retry orchestration loop |
 | `agent/src/wallet.ts` | Hedera wallet init, balance check, HEX/DER key parsing |
+
+---
+
+## Verified Real Payment (on-chain proof)
+
+A real paid request was settled end-to-end on Hedera testnet via Blocky402.
+
+| | |
+|---|---|
+| **Payer (agent)** | `0.0.8496637` |
+| **Recipient (treasury)** | `0.0.10450266` |
+| **Amount** | 0.01 HBAR |
+| **Facilitator fee-payer** | `0.0.7162784` |
+| **Transaction ID** | `0.0.7162784@1788996589.198259785` |
+| **Result** | `SUCCESS` (`CRYPTOTRANSFER`) |
+| **HashScan** | https://hashscan.io/testnet/transaction/0.0.7162784@1788996589.198259785 |
+
+On-chain transfers recorded by the mirror node:
+
+```
+0.0.8496637   -0.01000000 HBAR   payer debited (service price only)
+0.0.10450266  +0.01000000 HBAR   treasury credited
+0.0.7162784   -0.00260440 HBAR   Blocky402 fee-payer pays network fee
+0.0.802       +0.00260440 HBAR   Hedera node fee
+```
+
+The agent pays *only* the exact service price; the facilitator covers the
+network fee — the intended x402 "exact" behaviour. Verify independently:
+
+```bash
+# mirror node (public, no auth) — note the dashed txId format
+curl -s "https://testnet.mirrornode.hedera.com/api/v1/transactions/0.0.7162784-1788996589-198259785"
+```
+
+---
+
+## Reproduce a Real Payment
+
+The stack defaults to **stub** payments (no funds move) so local dev works
+without credentials. To settle a real payment on testnet:
+
+1. **Get a funded testnet account** from https://portal.hedera.com — use its
+   **ECDSA** key (HEX `0x...`). The real client uses `fromStringECDSA`; an
+   ED25519 key will not work as-is.
+2. **Use a *separate* account as the recipient.** ⚠️ Payer and recipient
+   **must differ** — a self-transfer nets to zero and Blocky402 rejects it with
+   `invalid_exact_hedera_payload_amount_mismatch`. Any second testnet account
+   works as the treasury.
+3. Set `agent/.env` with `PAYMENT_MODE=real` (see below).
+4. Set `backend/.env` with `HEDERA_RECIPIENT` pointing at the **treasury**
+   account (not the payer).
+5. Run backend (`:3001`), agent (`:3002`), frontend (`:5173`) in separate
+   terminals: `npm run dev` / `npm run dev` / `pnpm dev`.
+6. Grab the `txId` from the agent output and confirm on HashScan / mirror node.
+
+### `PAYMENT_MODE` (agent)
+
+```
+PAYMENT_MODE=stub   # default — no funds move, safe for local dev/demo
+PAYMENT_MODE=real   # settle on-chain via Blocky402 (needs a funded ECDSA account)
+```
+
+If `PAYMENT_MODE=real` but the wallet fails to initialise, the agent falls
+back to the stub and logs the active mode at startup.
