@@ -34,6 +34,69 @@ const BLOCKY402_URL =
 /** The facilitator's fee-payer account (from GET /supported, hedera:testnet). */
 const BLOCKY402_FEE_PAYER = "0.0.7162784";
 
+/**
+ * Retry a transient async operation with short exponential backoff.
+ *
+ * Used only around payload *creation* (which signs locally + reads from a
+ * Hedera node but moves no funds), so retrying is safe. NOT used for
+ * /verify or /settle, where a retry could risk a double settlement.
+ */
+async function withRetry<T>(
+  label: string,
+  fn: () => Promise<T>,
+  attempts = 3,
+  baseDelayMs = 400,
+): Promise<T> {
+  let lastErr: unknown;
+  for (let i = 1; i <= attempts; i++) {
+    try {
+      return await fn();
+    } catch (err) {
+      lastErr = err;
+      const msg = err instanceof Error ? err.message : String(err);
+      if (i < attempts) {
+        await new Promise((r) => setTimeout(r, baseDelayMs * i));
+        console.warn(`${label} attempt ${i}/${attempts} failed (${msg}) — retrying`);
+      }
+    }
+  }
+  const msg = lastErr instanceof Error ? lastErr.message : String(lastErr);
+  throw new Error(`${label} failed after ${attempts} attempts: ${msg}`);
+}
+
+/**
+ * fetch() that retries ONLY when the request throws at the network layer
+ * (e.g. "fetch failed" — connection reset/timeout, no response received).
+ * Once any HTTP response comes back, it is returned as-is with no retry.
+ *
+ * Safe for /verify and /settle: a thrown fetch means the request almost
+ * certainly never completed server-side, so retrying cannot double-settle.
+ * A returned response (even an error status) is trusted and never retried.
+ */
+async function fetchWithNetworkRetry(
+  label: string,
+  url: string,
+  init: RequestInit,
+  attempts = 5,
+  baseDelayMs = 500,
+): Promise<Response> {
+  let lastErr: unknown;
+  for (let i = 1; i <= attempts; i++) {
+    try {
+      return await fetch(url, init);
+    } catch (err) {
+      lastErr = err;
+      const msg = err instanceof Error ? err.message : String(err);
+      if (i < attempts) {
+        await new Promise((r) => setTimeout(r, baseDelayMs * i));
+        console.warn(`${label} network attempt ${i}/${attempts} failed (${msg}) — retrying`);
+      }
+    }
+  }
+  const msg = lastErr instanceof Error ? lastErr.message : String(lastErr);
+  throw new Error(`${label} network-failed after ${attempts} attempts: ${msg}`);
+}
+
 /** x402 v2 PaymentPayload shape (sent as base64 in X-PAYMENT header). */
 interface PaymentPayload {
   x402Version: number;
@@ -103,8 +166,13 @@ export class Blocky402HederaPaymentClient implements PaymentClient {
     );
 
     // 3. Sign the TransferTransaction (partial — facilitator co-signs as fee-payer)
+    // Wrapped in retry: createPaymentPayload reads from a Hedera node while
+    // signing and can fail transiently with a bare "fetch failed". It moves no
+    // funds, so retrying is safe (unlike /settle below).
     const scheme = new ExactHederaScheme(signer);
-    const signed = await scheme.createPaymentPayload(2, paymentRequirements);
+    const signed = await withRetry("createPaymentPayload", () =>
+      scheme.createPaymentPayload(2, paymentRequirements),
+    );
 
     const paymentPayload: PaymentPayload = {
       x402Version: 2,
@@ -121,7 +189,7 @@ export class Blocky402HederaPaymentClient implements PaymentClient {
     };
 
     // 4. Verify with facilitator
-    const verifyRes = await fetch(`${BLOCKY402_URL}/verify`, {
+    const verifyRes = await fetchWithNetworkRetry("Blocky402 /verify", `${BLOCKY402_URL}/verify`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(body),
@@ -138,7 +206,7 @@ export class Blocky402HederaPaymentClient implements PaymentClient {
     }
 
     // 5. Settle with facilitator (co-signs + submits to Hedera)
-    const settleRes = await fetch(`${BLOCKY402_URL}/settle`, {
+    const settleRes = await fetchWithNetworkRetry("Blocky402 /settle", `${BLOCKY402_URL}/settle`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(body),

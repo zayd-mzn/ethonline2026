@@ -38,6 +38,35 @@ const RECIPIENT = process.env.HEDERA_RECIPIENT ?? "0.0.STUB";
 /** Blocky402 fee-payer for Hedera testnet (from GET /supported). */
 const BLOCKY402_FEE_PAYER = "0.0.7162784";
 
+/**
+ * fetch() that retries ONLY on a network-layer throw (e.g. "fetch failed" —
+ * connection reset/timeout, no response received). Once any HTTP response is
+ * returned it is used as-is. Safe for /verify, which is read-only validation.
+ */
+async function fetchVerifyWithRetry(
+  url: string,
+  init: RequestInit,
+  attempts = 5,
+  baseDelayMs = 500,
+): Promise<Response> {
+  let lastErr: unknown;
+  for (let i = 1; i <= attempts; i++) {
+    try {
+      return await fetch(url, init);
+    } catch (err) {
+      lastErr = err;
+      if (i < attempts) {
+        await new Promise((r) => setTimeout(r, baseDelayMs * i));
+        console.warn(
+          `Blocky402 /verify network attempt ${i}/${attempts} failed ` +
+            `(${err instanceof Error ? err.message : String(err)}) — retrying`,
+        );
+      }
+    }
+  }
+  throw lastErr instanceof Error ? lastErr : new Error(String(lastErr));
+}
+
 /** x402 v2 PaymentRequirements shape (what goes inside the 402 body). */
 interface X402PaymentRequirements {
   scheme: "exact";
@@ -70,7 +99,7 @@ async function verifyX402Payment(
       paymentRequirements: requirements,
     };
 
-    const res = await fetch(`${BLOCKY402_URL}/verify`, {
+    const res = await fetchVerifyWithRetry(`${BLOCKY402_URL}/verify`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(body),
