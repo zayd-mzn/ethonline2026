@@ -12,7 +12,6 @@ import {
   LayoutGrid,
   LockKeyhole,
   Plus,
-  Radar,
   ScanFace,
   Search,
   Server,
@@ -238,8 +237,8 @@ function App() {
         {/* brand + collapse toggle */}
         <div className={`flex items-center pt-4 ${collapsed ? "justify-center px-2" : "justify-between px-3"}`}>
           <button onClick={() => setView("marketplace")} className="flex items-center gap-3 text-left">
-            <span className="flex-shrink-0 grid h-10 w-10 place-items-center bg-[#b8f34b] text-[#07100d] [clip-path:polygon(50%_0,100%_25%,100%_75%,50%_100%,0_75%,0_25%)]"><Radar size={21} /></span>
-            {!collapsed && <span><strong className="block text-sm tracking-[.16em]">SIGNAL</strong><small className="block text-[9px] tracking-[.16em] text-[#82988f]">MARKET</small></span>}
+            <img src="/logo-cim.png" alt="CIM logo" className="h-10 w-10 flex-shrink-0 object-contain" />
+            {!collapsed && <span><strong className="block text-sm tracking-[.16em]">CIM</strong><small className="block text-[9px] tracking-[.14em] text-[#82988f]">CYBER INTEL MARKET</small></span>}
           </button>
           {!collapsed && (
             <button onClick={() => setCollapsed(true)} className="ml-2 rounded p-1.5 text-[#4a5f6a] transition hover:bg-white/[.04] hover:text-white" aria-label="Collapse sidebar">
@@ -282,7 +281,7 @@ function App() {
       {/* ── main ── */}
       <div className="min-w-0 transition-[margin] duration-200 ease-in-out" style={{ marginLeft: collapsed ? "72px" : "238px" }}>
         <header className="sticky top-0 z-30 flex h-[72px] items-center justify-between border-b border-[#1d3029] bg-[#07100d]/85 px-5 backdrop-blur-xl lg:px-10">
-          <div className="flex items-center gap-2 text-xs font-bold tracking-[.12em] md:hidden"><Radar size={18} className="text-[#b8f34b]" /> SIGNAL MARKET</div>
+          <div className="flex items-center gap-2 text-xs font-bold tracking-[.12em] md:hidden"><img src="/logo-cim.png" alt="CIM logo" className="h-[18px] w-[18px] object-contain" /> CIM</div>
           <div className="ml-auto flex items-center gap-5">
             <span className="hidden items-center gap-2 text-[9px] font-bold tracking-[.13em] text-[#789087] sm:flex"><i className="h-1.5 w-1.5 animate-pulse rounded-full bg-[#b8f34b]" />SYSTEMS OPERATIONAL</span>
             <button onClick={() => setView("verify")} className={`flex items-center gap-2 rounded border px-3 py-2 text-[9px] font-bold tracking-[.08em] ${verified ? "border-[#547028] bg-[#182415] text-[#b8f34b]" : "border-[#2c443c] bg-[#10201b] text-white"}`}>

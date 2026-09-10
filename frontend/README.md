@@ -1,23 +1,23 @@
-# Signal Market V1
+# CIM Frontend — Cyber Intel Marketplace
 
-Standalone recreation of the original green/black Cyber Intel Marketplace dashboard.
-The active ETHGlobal project remains untouched in `~/Desktop/ethglobal`.
+React + Vite dashboard for CIM: marketplace directory, live agent monitor,
+provider console, World Selfie Check flow, and the HashPack "fund agent" view.
 
 ## Run
 
 ```bash
-cd ~/Desktop/ethglobal-v1
 pnpm install
 pnpm dev
 ```
 
-Open `http://localhost:5174` (or the port printed by Vite).
+Open the URL printed by Vite (default `http://localhost:5173`). API calls are
+proxied to the backend (`:3001`) and agent event stream (`:3002`) — see
+`vite.config.ts`.
 
-## Included views
+## Views
 
 - Marketplace directory and operational metrics
-- Live agent payment monitor
+- Live agent payment monitor (with live agent balance)
 - Provider publishing console
 - World Selfie Check demo flow
-
-All blockchain, API, payment, and identity behavior is mock data intended for frontend development.
+- Fund agent (HashPack / WalletConnect, one-time funding)
