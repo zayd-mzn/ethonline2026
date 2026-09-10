@@ -10,8 +10,12 @@
     "typecheck": "tsc -b --pretty false"
   },
   "dependencies": {
+    "@hashgraph/hedera-wallet-connect": "1.5.1",
+    "@hashgraph/proto": "2.26.0-beta.3",
+    "@hashgraph/sdk": "2.81.0",
     "@react-three/drei": "10.7.8",
     "@react-three/fiber": "9.7.0",
+    "@walletconnect/modal": "2.7.0",
     "clsx": "2.1.1",
     "framer-motion": "13.2.0",
     "lucide-react": "1.42.0",

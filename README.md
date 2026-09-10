@@ -128,6 +128,30 @@ Hedera network fee. Full details in [`docs/PAYMENTS.md`](docs/PAYMENTS.md).
 
 ---
 
+## Funding the agent (HashPack, one-time)
+
+The agent pays autonomously using **its own Hedera key** — no human in the loop per
+query. To bankroll it, the dashboard has a **Fund agent** view that connects
+**HashPack** over WalletConnect and approves a **single** HBAR transfer into the
+agent's account:
+
+1. The human clicks **Connect HashPack** (one interactive pairing).
+2. They enter an amount and approve **one** transfer to the agent's account.
+3. The agent then spends per query on its own — **no further wallet prompts**.
+
+This is a deliberate design: a browser wallet like HashPack never releases its key, so
+"connect once and let the agent sign forever" is impossible by construction. Instead the
+human authorises *funding* once; the agent's budget guard (`MAX_SPEND_HBAR`) caps how
+much it can spend. Top-ups are just another one-time approval.
+
+Setup:
+- Backend: set `AGENT_ACCOUNT_ID` (the agent's own account) — exposed via
+  `GET /agent-info` so the frontend knows where to send funds.
+- Frontend: set `VITE_WALLETCONNECT_PROJECT_ID` in `frontend/.env.local`
+  (free id from <https://cloud.reown.com>).
+
+---
+
 ## Repository layout
 
 ```
@@ -243,6 +267,7 @@ Base URL: `http://localhost:3001`
 | Method | Path | Description | Gated by |
 |---|---|---|---|
 | `GET` | `/health` | Liveness + HCS topic id / HashScan link | — |
+| `GET` | `/agent-info` | Agent's fund-recipient account + network (for HashPack funding) | — |
 | `GET` | `/marketplace/services` | List discoverable services | open |
 | `POST` | `/marketplace/services` | Publish a service | World Selfie Check |
 | `POST` | `/agents/register` | Register an agent to a verified human → `{ agentId }` | World Selfie Check |

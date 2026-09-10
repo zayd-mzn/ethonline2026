@@ -34,6 +34,16 @@ app.get("/health", async () => {
   };
 });
 
+// Tell the frontend which Hedera account the agent pays from, so the HashPack
+// "fund the agent" flow knows where to send the one-time top-up. Sourced from
+// AGENT_ACCOUNT_ID (the agent's own account), with the treasury as context.
+app.get("/agent-info", async () => {
+  return {
+    agentAccountId: process.env.AGENT_ACCOUNT_ID ?? null,
+    network: process.env.HEDERA_NETWORK ?? "testnet",
+  };
+});
+
 // Discovery: agents and the frontend call this to see available services.
 app.get("/marketplace/services", async (): Promise<ServicesListResponse> => {
   return { services: listServices() };

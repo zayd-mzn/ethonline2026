@@ -31,8 +31,14 @@ import { ServiceGrid } from "./components/ServiceGrid";
 import { BackgroundBeams } from "./components/ui/background-beams";
 import { GitHubGlobe } from "./components/ui/github-globe";
 import { apiFetch, BACKEND_URL, AGENT_EVENTS_URL } from "./api";
+import {
+  connectHashPack,
+  disconnectHashPack,
+  fundAgent,
+  isConnected as isHashPackConnected,
+} from "./lib/hashpack";
 
-type View = "marketplace" | "monitor" | "provider" | "verify";
+type View = "marketplace" | "monitor" | "provider" | "verify" | "wallet";
 type Stage = "discover" | "call" | "402" | "paying" | "paid" | "data";
 
 interface AgentEvent { stage: Stage; detail: string; ts: number }
@@ -85,6 +91,7 @@ const nav = [
   { id: "marketplace" as const, label: "Marketplace", icon: LayoutGrid },
   { id: "monitor"     as const, label: "Agent monitor", icon: Activity },
   { id: "provider"    as const, label: "Provider", icon: Server },
+  { id: "wallet"      as const, label: "Fund agent", icon: WalletCards },
   { id: "verify"      as const, label: "Verification", icon: Fingerprint },
 ];
 
@@ -287,6 +294,7 @@ function App() {
           {view === "marketplace" && <Marketplace services={services} servicesLoading={servicesLoading} servicesError={servicesError} investigate={investigate} onProvider={() => setView("provider")} />}
           {view === "monitor" && <Monitor events={events} running={running} investigate={investigate} activeStep={activeStep} agentOnline={agentOnline} />}
           {view === "provider" && <Provider verified={verified} notice={notice} publish={publish} verify={() => setView("verify")} publishing={publishing} />}
+          {view === "wallet" && <FundAgent />}
           {view === "verify" && <Verification verified={verified} complete={() => { setVerified(true); setNotice(""); }} />}
         </main>
       </div>
@@ -586,6 +594,162 @@ function Verification({ verified, complete }: { verified: boolean; complete: () 
         <div className="inline-flex items-center gap-1.5 text-[9px] font-bold tracking-[.12em] text-[#55e6c2]"><Sparkles size={14} />WORLD ID SANDBOX</div><h2 className="my-4 text-2xl font-semibold">{verified ? "You're verified" : "Complete Selfie Check"}</h2><p className="text-xs leading-6 text-[#82988f]">{verified ? "This demo identity can publish services and back autonomous agents." : "A quick facial uniqueness check confirms that a real, unique human controls this provider account."}</p>
         <div className="my-6 flex gap-3 rounded border border-[#23473d] bg-[#0c211b] p-3 text-left text-[#55e6c2]"><ShieldCheck size={18} /><span><strong className="block text-[10px] text-[#bcd1c8]">Privacy preserved</strong><small className="text-[8px] text-[#6f8d82]">No image is stored. Only a zero-knowledge proof is shared.</small></span></div>
         <button onClick={complete} disabled={verified} className="flex w-full items-center justify-center gap-2 rounded bg-[#b8f34b] py-3 text-xs font-bold text-[#07100d] disabled:opacity-60">{verified ? <><Check size={17} />Verification complete</> : <><ScanFace size={17} />Start Selfie Check</>}</button><small className="mt-3 block text-[8px] tracking-[.12em] text-[#51655d]">DEMO MODE · WORLD ID SANDBOX PLACEHOLDER</small>
+      </div>
+    </section>
+  );
+}
+
+/**
+ * Fund-the-agent view — Option 1 wallet flow.
+ *
+ * The human connects HashPack ONCE and approves a single HBAR transfer to the
+ * agent's own account. After that the agent spends autonomously with its own
+ * key — no further wallet prompts. This is the only interactive wallet step.
+ */
+function FundAgent() {
+  const [agentAccount, setAgentAccount] = useState<string | null>(null);
+  const [connected, setConnected] = useState<boolean>(isHashPackConnected());
+  const [account, setAccount] = useState<string | null>(null);
+  const [amount, setAmount] = useState<string>("5");
+  const [busy, setBusy] = useState<"idle" | "connecting" | "funding">("idle");
+  const [error, setError] = useState<string | null>(null);
+  const [txId, setTxId] = useState<string | null>(null);
+
+  // Discover which account the agent pays from (the fund recipient).
+  useEffect(() => {
+    apiFetch<{ agentAccountId: string | null }>(`${BACKEND_URL}/agent-info`)
+      .then((d) => setAgentAccount(d.agentAccountId))
+      .catch(() => setAgentAccount(null));
+  }, []);
+
+  const onConnect = async () => {
+    setError(null);
+    setBusy("connecting");
+    try {
+      const acct = await connectHashPack();
+      setAccount(acct);
+      setConnected(true);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setBusy("idle");
+    }
+  };
+
+  const onDisconnect = async () => {
+    await disconnectHashPack().catch(() => {});
+    setConnected(false);
+    setAccount(null);
+  };
+
+  const onFund = async () => {
+    setError(null);
+    setTxId(null);
+    if (!agentAccount) {
+      setError("Agent account is not configured on the backend (AGENT_ACCOUNT_ID).");
+      return;
+    }
+    const amt = Number(amount);
+    if (!(amt > 0)) {
+      setError("Enter a funding amount greater than zero.");
+      return;
+    }
+    setBusy("funding");
+    try {
+      const id = await fundAgent(agentAccount, amt);
+      setTxId(id);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setBusy("idle");
+    }
+  };
+
+  return (
+    <section className="view-enter pb-20">
+      <div className="mx-auto max-w-3xl text-center">
+        <PageHead
+          eyebrow="AGENT WALLET"
+          title="Fund your agent once, then let it run"
+          text="Connect HashPack and approve a single transfer to your agent's account. After that, the agent pays per query on its own — no wallet prompts, no human in the loop."
+        />
+      </div>
+
+      <div className="mx-auto max-w-md rounded-lg border border-[#1d3029] bg-[#0a1512] p-8">
+        {/* Step 1 — connect */}
+        <div className="mb-6">
+          <div className="mb-2 flex items-center gap-2 text-[9px] font-bold tracking-[.14em] text-[#55e6c2]">
+            <WalletCards size={14} /> STEP 1 · CONNECT WALLET
+          </div>
+          {connected ? (
+            <div className="flex items-center justify-between rounded border border-[#547028] bg-[#182415] px-3 py-3 text-xs text-[#b8f34b]">
+              <span className="flex items-center gap-2"><Check size={16} /> {account ?? "Connected"}</span>
+              <button onClick={onDisconnect} className="text-[9px] font-bold tracking-[.1em] text-[#82988f] hover:text-white">DISCONNECT</button>
+            </div>
+          ) : (
+            <button
+              onClick={onConnect}
+              disabled={busy !== "idle"}
+              className="flex w-full items-center justify-center gap-2 rounded bg-[#b8f34b] py-3 text-xs font-bold text-[#07100d] disabled:opacity-60"
+            >
+              <WalletCards size={17} />
+              {busy === "connecting" ? "Opening HashPack…" : "Connect HashPack"}
+            </button>
+          )}
+        </div>
+
+        {/* Step 2 — fund */}
+        <div className="mb-2 flex items-center gap-2 text-[9px] font-bold tracking-[.14em] text-[#55e6c2]">
+          <CircleDollarSign size={14} /> STEP 2 · FUND AGENT
+        </div>
+        <div className="rounded border border-[#23473d] bg-[#0c211b] p-3">
+          <div className="mb-3 flex items-center justify-between text-[10px] text-[#82988f]">
+            <span>Agent account</span>
+            <span className="font-mono text-[#bcd1c8]">{agentAccount ?? "not configured"}</span>
+          </div>
+          <label className="mb-1 block text-[9px] font-bold tracking-[.12em] text-[#61766e]">AMOUNT (HBAR)</label>
+          <input
+            type="number"
+            min="0"
+            step="0.5"
+            value={amount}
+            onChange={(e) => setAmount(e.target.value)}
+            className="mb-3 w-full rounded border border-[#284038] bg-[#07100d] px-3 py-2 font-mono text-sm text-white"
+          />
+          <button
+            onClick={onFund}
+            disabled={!connected || busy !== "idle" || !agentAccount}
+            className="flex w-full items-center justify-center gap-2 rounded border border-[#3d5b29] bg-[#13231e] py-3 text-xs font-bold text-[#b8f34b] disabled:opacity-50"
+          >
+            <Zap size={16} />
+            {busy === "funding" ? "Awaiting approval in HashPack…" : "Fund agent (one-time)"}
+          </button>
+        </div>
+
+        {error && (
+          <div className="mt-4 rounded border border-[#5b2323] bg-[#210c0c] px-3 py-2 text-[10px] text-[#ff9b9b]">
+            {error}
+          </div>
+        )}
+        {txId && (
+          <a
+            href={`https://hashscan.io/testnet/transaction/${txId}`}
+            target="_blank"
+            rel="noreferrer"
+            className="mt-4 flex items-center justify-between rounded border border-[#547028] bg-[#182415] px-3 py-3 text-[10px] text-[#b8f34b]"
+          >
+            <span className="flex items-center gap-2"><Check size={14} /> Funded — view on HashScan</span>
+            <ArrowUpRight size={14} />
+          </a>
+        )}
+
+        <div className="mt-6 flex gap-3 rounded border border-[#23473d] bg-[#0c211b] p-3 text-left text-[#55e6c2]">
+          <Bot size={18} />
+          <span>
+            <strong className="block text-[10px] text-[#bcd1c8]">Autonomous after funding</strong>
+            <small className="text-[8px] text-[#6f8d82]">You approve one transfer. The agent then pays per query with its own key — no further prompts.</small>
+          </span>
+        </div>
       </div>
     </section>
   );
