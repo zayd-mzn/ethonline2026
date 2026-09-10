@@ -10,6 +10,15 @@ export const BACKEND_URL =
 export const AGENT_EVENTS_URL =
   (import.meta.env.VITE_AGENT_URL as string | undefined) ?? "http://localhost:3002";
 
+/** World ID app id (public — ships in the bundle). From the World Dev Portal. */
+export const WORLD_APP_ID =
+  (import.meta.env.VITE_WORLD_APP_ID as `app_${string}` | undefined) ??
+  "app_e2c0af203369e1d934c1782a8abd051a";
+
+/** World Incognito Action — must match the backend's WORLD_ACTION. */
+export const WORLD_ACTION =
+  (import.meta.env.VITE_WORLD_ACTION as string | undefined) ?? "publish-service";
+
 /** Shared fetch wrapper — throws on non-2xx with the API error message. */
 export async function apiFetch<T>(url: string, init?: RequestInit): Promise<T> {
   const res = await fetch(url, init);

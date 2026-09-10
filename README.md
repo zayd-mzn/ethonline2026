@@ -330,6 +330,45 @@ Type-check either package with `npm run typecheck`.
 - Provider verified-state is held in memory (not yet persisted to the DB).
 - Real-payment mode requires an ECDSA key and a distinct recipient (documented).
 
+### ⚠️ Active blocker — frontend World ID verification (staging vs production)
+
+**Status:** the real World ID flow is wired end-to-end but not yet passing a live
+verification, due to a World-app environment mismatch. Handing off to the next owner.
+
+**What's done**
+- Frontend `Verification` screen uses the real **IDKit** (`@worldcoin/idkit@1.5.0`)
+  `IDKitWidget` — no more placeholder `setVerified(true)`. It opens a real QR, and on
+  success forwards the actual proof.
+- The captured proof is sent to the backend as `X-Selfie-Check-Proof` on
+  `POST /marketplace/services` (the hardcoded `"stub-proof"` is gone).
+- Backend already verifies proofs against World's API using `WORLD_APP_ID` /
+  `WORLD_ACTION` (must match the frontend's `VITE_WORLD_APP_ID` / `VITE_WORLD_ACTION`).
+- Vite alias added for `@worldcoin/idkit` (its package `main` points at raw TS and
+  crashes the browser otherwise — see `vite.config.ts`).
+- World app + `publish-service` action created; app id `app_e2c0af203369e1d934c1782a8abd051a`.
+
+**The blocker**
+- The World **Simulator** (`simulator.worldcoin.org`) only accepts **staging** requests
+  and rejects our request with: *"Production request detected — set
+  `environment: "staging"` in your request payload."*
+- Our World app is a **production** app, and **IDKit 1.5.0 has no `environment` prop**
+  (confirmed — it hardcodes production; the `environment: "staging"` field only exists
+  in IDKit v2+). So we can't flip it in code with the current version.
+
+**Two ways forward (pick one)**
+1. **Create a staging World app** and use its `app_staging_...` id — IDKit 1.5.0 routes
+   to staging automatically for staging apps, and the Simulator will accept it. (The
+   new World portal makes the staging option hard to find; that's the sticking point.)
+2. **Upgrade IDKit to v2+** and pass `environment: "staging"` explicitly. Bigger change:
+   v4's API is a rewrite (no `IDKitWidget`) — would need the verify screen rebuilt.
+   Alternatively, verify with a **real World App on a phone** against the production app
+   (no simulator needed), which is the most demo-legit but needs an orb/device account.
+
+**Config touch-points if the app id changes**
+- `frontend/.env.local` → `VITE_WORLD_APP_ID`, `VITE_WORLD_ACTION`
+- `frontend/src/api.ts` → default `WORLD_APP_ID` / `WORLD_ACTION`
+- `backend/.env` → `WORLD_APP_ID`, `WORLD_ACTION` (must match the frontend)
+
 ---
 
 ## Team

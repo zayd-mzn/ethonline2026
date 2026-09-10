@@ -29,7 +29,8 @@ import { AgentTimeline } from "./components/AgentTimeline";
 import { ServiceGrid } from "./components/ServiceGrid";
 import { BackgroundBeams } from "./components/ui/background-beams";
 import { GitHubGlobe } from "./components/ui/github-globe";
-import { apiFetch, BACKEND_URL, AGENT_EVENTS_URL } from "./api";
+import { apiFetch, BACKEND_URL, AGENT_EVENTS_URL, WORLD_APP_ID, WORLD_ACTION } from "./api";
+import { IDKitWidget, VerificationLevel, type ISuccessResult } from "@worldcoin/idkit";
 import {
   connectHashPack,
   disconnectHashPack,
@@ -188,12 +189,14 @@ function App() {
 
   // ── provider publish ──────────────────────────────────────────────
   const [verified, setVerified] = useState(false);
+  /** Real World ID proof (JSON string) captured by IDKit; sent when publishing. */
+  const [verifiedProof, setVerifiedProof] = useState<string | null>(null);
   const [notice,   setNotice]   = useState("");
   const [publishing, setPublishing] = useState(false);
 
   async function publish(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (!verified) { setNotice("Complete Selfie Check before publishing."); setView("verify"); return; }
+    if (!verified || !verifiedProof) { setNotice("Complete Selfie Check before publishing."); setView("verify"); return; }
     setPublishing(true);
     setNotice("");
     const form = event.currentTarget;
@@ -209,8 +212,8 @@ function App() {
         method:  "POST",
         headers: {
           "Content-Type": "application/json",
-          // Member 4's World ID proof goes here; stub value passes the backend stub
-          "X-Selfie-Check-Proof": "stub-proof",
+          // Real World ID proof captured by IDKit on the verify screen.
+          "X-Selfie-Check-Proof": verifiedProof,
         },
         body: JSON.stringify(body),
       });
@@ -295,7 +298,7 @@ function App() {
           {view === "monitor" && <Monitor events={events} running={running} investigate={investigate} activeStep={activeStep} agentOnline={agentOnline} />}
           {view === "provider" && <Provider verified={verified} notice={notice} publish={publish} verify={() => setView("verify")} publishing={publishing} />}
           {view === "wallet" && <FundAgent />}
-          {view === "verify" && <Verification verified={verified} complete={() => { setVerified(true); setNotice(""); }} />}
+          {view === "verify" && <Verification verified={verified} complete={(proof) => { setVerified(true); setVerifiedProof(proof); setNotice(""); }} />}
         </main>
       </div>
 
@@ -661,14 +664,35 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
   return <label className="mb-4 block text-[9px] font-bold tracking-[.06em] text-[#a8bbb3] [&_input]:mt-2 [&_input]:w-full [&_input]:rounded [&_input]:border [&_input]:border-[#293d36] [&_input]:bg-[#07100d] [&_input]:p-3 [&_input]:text-xs [&_textarea]:mt-2 [&_textarea]:w-full [&_textarea]:rounded [&_textarea]:border [&_textarea]:border-[#293d36] [&_textarea]:bg-[#07100d] [&_textarea]:p-3 [&_textarea]:text-xs [&_select]:mt-2 [&_select]:w-full [&_select]:rounded [&_select]:border [&_select]:border-[#293d36] [&_select]:bg-[#07100d] [&_select]:p-3 [&_select]:text-xs">{label}{children}</label>;
 }
 
-function Verification({ verified, complete }: { verified: boolean; complete: () => void }) {
+function Verification({ verified, complete }: { verified: boolean; complete: (proof: string) => void }) {
+  // IDKit calls this after a successful World verification. We forward the full
+  // proof (as JSON) up to App state so it can be sent to the backend on publish.
+  const onSuccess = (result: ISuccessResult) => {
+    complete(JSON.stringify(result));
+  };
+
   return (
     <section className="view-enter pb-20"><div className="mx-auto max-w-3xl text-center"><PageHead eyebrow="WORLD IDENTITY" title="Prove personhood, preserve privacy" text="One human, one provider. Verification prevents sybil abuse without exposing personal information." /></div>
       <div className="mx-auto max-w-md rounded-lg border border-[#1d3029] bg-[#0a1512] p-8 text-center">
         <div className="relative mx-auto mb-6 grid h-32 w-32 place-items-center overflow-hidden rounded-full border border-[#3d5b29] bg-[radial-gradient(circle,#1b2c1a,#0a1512_70%)] text-[#b8f34b]"><ScanFace size={72} /><i className="scan-line absolute h-px w-full bg-[#b8f34b] shadow-[0_0_10px_#b8f34b]" /></div>
-        <div className="inline-flex items-center gap-1.5 text-[9px] font-bold tracking-[.12em] text-[#55e6c2]"><Sparkles size={14} />WORLD ID SANDBOX</div><h2 className="my-4 text-2xl font-semibold">{verified ? "You're verified" : "Complete Selfie Check"}</h2><p className="text-xs leading-6 text-[#82988f]">{verified ? "This demo identity can publish services and back autonomous agents." : "A quick facial uniqueness check confirms that a real, unique human controls this provider account."}</p>
+        <div className="inline-flex items-center gap-1.5 text-[9px] font-bold tracking-[.12em] text-[#55e6c2]"><Sparkles size={14} />WORLD ID</div><h2 className="my-4 text-2xl font-semibold">{verified ? "You're verified" : "Verify with World ID"}</h2><p className="text-xs leading-6 text-[#82988f]">{verified ? "This identity can publish services and back autonomous agents." : "Prove you're a unique human with World ID. Scan the QR with the World App (or the World Simulator) to generate a zero-knowledge proof."}</p>
         <div className="my-6 flex gap-3 rounded border border-[#23473d] bg-[#0c211b] p-3 text-left text-[#55e6c2]"><ShieldCheck size={18} /><span><strong className="block text-[10px] text-[#bcd1c8]">Privacy preserved</strong><small className="text-[8px] text-[#6f8d82]">No image is stored. Only a zero-knowledge proof is shared.</small></span></div>
-        <button onClick={complete} disabled={verified} className="flex w-full items-center justify-center gap-2 rounded bg-[#b8f34b] py-3 text-xs font-bold text-[#07100d] disabled:opacity-60">{verified ? <><Check size={17} />Verification complete</> : <><ScanFace size={17} />Start Selfie Check</>}</button><small className="mt-3 block text-[8px] tracking-[.12em] text-[#51655d]">DEMO MODE · WORLD ID SANDBOX PLACEHOLDER</small>
+        {verified ? (
+          <button disabled className="flex w-full items-center justify-center gap-2 rounded bg-[#b8f34b] py-3 text-xs font-bold text-[#07100d] disabled:opacity-60"><Check size={17} />Verification complete</button>
+        ) : (
+          <IDKitWidget
+            app_id={WORLD_APP_ID}
+            action={WORLD_ACTION}
+            signal=""
+            verification_level={VerificationLevel.Device}
+            onSuccess={onSuccess}
+          >
+            {({ open }: { open: () => void }) => (
+              <button onClick={open} className="flex w-full items-center justify-center gap-2 rounded bg-[#b8f34b] py-3 text-xs font-bold text-[#07100d]"><ScanFace size={17} />Verify with World ID</button>
+            )}
+          </IDKitWidget>
+        )}
+        <small className="mt-3 block text-[8px] tracking-[.12em] text-[#51655d]">WORLD ID · SCAN WITH WORLD APP OR SIMULATOR</small>
       </div>
     </section>
   );
