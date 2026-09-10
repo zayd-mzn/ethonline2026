@@ -37,6 +37,7 @@ import {
   fundAgent,
   isConnected as isHashPackConnected,
 } from "./lib/hashpack";
+import { fetchAccountBalanceHbar } from "./lib/mirror";
 
 type View = "marketplace" | "monitor" | "provider" | "verify" | "wallet";
 type Stage = "discover" | "call" | "402" | "paying" | "paid" | "data";
@@ -516,11 +517,86 @@ function Monitor({ events, running, investigate, activeStep, agentOnline }: { ev
               </div>
             ))}
           </dl>
+          <AgentBalance />
           {/* HashScan link — wire in live testnet transaction ID from Member 1 */}
           <a href="https://hashscan.io/testnet" target="_blank" rel="noreferrer" className="mt-6 flex items-center gap-1 text-[10px] text-[#55e6c2]">View HCS audit trail<ArrowUpRight size={13} /></a>
         </aside>
       </div>
     </section>
+  );
+}
+
+/**
+ * Live agent balance — reads the agent account (from /agent-info) and its
+ * HBAR balance from the public Hedera mirror node. Auto-refreshes every 15s
+ * and offers a manual refresh.
+ */
+function AgentBalance() {
+  const [account, setAccount] = useState<string | null>(null);
+  const [balance, setBalance] = useState<number | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const refresh = useCallback(async (acct: string) => {
+    setLoading(true);
+    setError(null);
+    try {
+      setBalance(await fetchAccountBalanceHbar(acct));
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  // Discover the agent account once.
+  useEffect(() => {
+    apiFetch<{ agentAccountId: string | null }>(`${BACKEND_URL}/agent-info`)
+      .then((d) => setAccount(d.agentAccountId))
+      .catch(() => setAccount(null));
+  }, []);
+
+  // Fetch + poll the balance whenever we have an account.
+  useEffect(() => {
+    if (!account) return;
+    refresh(account);
+    const id = setInterval(() => refresh(account), 15000);
+    return () => clearInterval(id);
+  }, [account, refresh]);
+
+  return (
+    <div className="mt-6 rounded border border-[#23473d] bg-[#0c211b] p-4">
+      <div className="mb-2 flex items-center justify-between">
+        <span className="flex items-center gap-1.5 text-[9px] font-bold tracking-[.14em] text-[#55e6c2]">
+          <WalletCards size={13} /> AGENT BALANCE
+        </span>
+        <button
+          onClick={() => account && refresh(account)}
+          disabled={!account || loading}
+          className="text-[8px] font-bold tracking-[.1em] text-[#82988f] hover:text-white disabled:opacity-40"
+        >
+          {loading ? "…" : "↻ REFRESH"}
+        </button>
+      </div>
+      {error ? (
+        <p className="text-[10px] text-[#ff9b9b]">{error}</p>
+      ) : (
+        <p className="font-mono text-lg text-[#b8f34b]">
+          {balance === null ? "—" : `${balance.toLocaleString(undefined, { maximumFractionDigits: 4 })} `}
+          {balance !== null && <span className="text-xs text-[#6f8d82]">HBAR</span>}
+        </p>
+      )}
+      {account && (
+        <a
+          href={`https://hashscan.io/testnet/account/${account}`}
+          target="_blank"
+          rel="noreferrer"
+          className="mt-1 flex items-center gap-1 font-mono text-[9px] text-[#6f8d82] hover:text-[#55e6c2]"
+        >
+          {account} <ArrowUpRight size={11} />
+        </a>
+      )}
+    </div>
   );
 }
 

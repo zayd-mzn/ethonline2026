@@ -128,11 +128,16 @@ export async function fundAgent(
     .addHbarTransfer(payer, amount.negated())
     .addHbarTransfer(recipient, amount);
 
+  // Freeze via the connected signer so it stamps a transaction id and node
+  // account ids (no local Client available in the browser). This resolves the
+  // "`transactionId` must be set or `client` must be provided" error.
+  const frozen = await tx.freezeWithSigner(signer);
+
   // Ask HashPack to sign + submit this single transfer. The human approves
   // it once in the wallet; the app never touches the key.
   const result = await connector.signAndExecuteTransaction({
     signerAccountId: `hedera:testnet:${payer.toString()}`,
-    transactionList: transactionToBase64String(tx),
+    transactionList: transactionToBase64String(frozen),
   });
 
   const txId =
