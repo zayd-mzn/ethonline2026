@@ -102,6 +102,13 @@ export interface ApiError {
 /** Member 4 — identity. Verifies a Selfie Check proof (X-Selfie-Check-Proof header). */
 export interface IdentityVerifier {
   verifySelfieCheck(proof: string): Promise<{ providerId: string } | null>;
+  /**
+   * Register an agent by verifying its human owner's World proof. Derives a
+   * stable agentId from the human's nullifier_hash and persists the
+   * human↔agent link. Returns the agentId, or null if the proof is invalid.
+   */
+  registerAgentWithProof(proof: string): Promise<{ agentId: string } | null>;
+  /** True if the agentId is backed by a verified human (checked against the registry). */
   resolveAgentBacking(agentId: string): Promise<boolean>;
 }
 

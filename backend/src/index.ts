@@ -76,6 +76,30 @@ app.post("/marketplace/services", async (request,reply) => {
     return reply.code(201).send(service);
 });
 
+// Register an agent to a verified human. The human's owner verifies with
+// World (same Selfie Check proof used for publishing) and the backend ties
+// the resulting agentId to that human's nullifier_hash — the accountability
+// link. The agent then sends this agentId as X-Agent-Id on gated requests.
+app.post("/agents/register", async (request, reply) => {
+  const proof = request.headers["x-selfie-check-proof"];
+  if (typeof proof !== "string") {
+    return reply.code(401).send({
+      error: "unauthorized",
+      message: "Missing X-Selfie-Check-Proof header",
+    });
+  }
+
+  const registered = await worldIdentity.registerAgentWithProof(proof);
+  if (!registered) {
+    return reply.code(401).send({
+      error: "unauthorized",
+      message: "Invalid Selfie Check proof — cannot register agent",
+    });
+  }
+
+  return reply.code(201).send({ agentId: registered.agentId });
+});
+
 // Threat-intel services. These will be payment-gated by M1's paymentGate.
 const priceFor = (resource: string) => getServiceByEndpoint(resource)?.priceHbar;
 

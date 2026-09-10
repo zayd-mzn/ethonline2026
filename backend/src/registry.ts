@@ -37,6 +37,18 @@ db.exec(`
   )
 `);
 
+// Agent registry: the human↔agent accountability link. Each row ties an
+// agentId to the World nullifier_hash of the real human who verified. The
+// nullifier_hash is unique per human, so this is the "who is responsible"
+// record — durable across restarts (unlike the in-memory provider map).
+db.exec(`
+  CREATE TABLE IF NOT EXISTS agents (
+    agentId       TEXT PRIMARY KEY,
+    nullifierHash TEXT NOT NULL UNIQUE,
+    createdAt     TEXT NOT NULL
+  )
+`);
+
 /** List all services (discovery). */
 export function listServices(): Service[] {
   return db.prepare("SELECT * FROM services").all() as unknown as Service[];
@@ -106,4 +118,48 @@ export function seedServices(): void {
     },
     "prov_seed",
   );
+}
+
+/* ------------------------------------------------------------------ *
+ * Agent registry — the human↔agent accountability link.
+ * ------------------------------------------------------------------ */
+
+/** A registered agent, tied to the human who verified via World. */
+export interface AgentRecord {
+  agentId: string;
+  nullifierHash: string;
+  createdAt: string;
+}
+
+/**
+ * Record (or return the existing) link between an agent and the human's
+ * World nullifier_hash. Idempotent: the same human re-registering the same
+ * agent returns the existing row rather than creating a duplicate.
+ */
+export function upsertAgent(agentId: string, nullifierHash: string): AgentRecord {
+  const existing = getAgent(agentId);
+  if (existing) return existing;
+
+  const record: AgentRecord = {
+    agentId,
+    nullifierHash,
+    createdAt: new Date().toISOString(),
+  };
+  db.prepare(
+    `INSERT INTO agents (agentId, nullifierHash, createdAt)
+     VALUES (:agentId, :nullifierHash, :createdAt)`,
+  ).run(record as unknown as Record<string, string>);
+  return record;
+}
+
+/** Look up a registered agent by its id. */
+export function getAgent(agentId: string): AgentRecord | undefined {
+  return db.prepare("SELECT * FROM agents WHERE agentId = ?").get(agentId) as
+    | AgentRecord
+    | undefined;
+}
+
+/** True if the agent is registered (i.e. backed by a verified human). */
+export function isAgentRegistered(agentId: string): boolean {
+  return getAgent(agentId) !== undefined;
 }

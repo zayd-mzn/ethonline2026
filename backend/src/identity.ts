@@ -6,6 +6,7 @@
  */
 
 import type { IdentityVerifier } from "./types.js";
+import { upsertAgent, isAgentRegistered } from "./registry.js";
 import crypto from "node:crypto";
 
 // World ID app credentials from environment
@@ -111,30 +112,49 @@ export const worldIdentity: IdentityVerifier = {
   },
 
   /**
-   * Resolve whether an agent is backed by a verified human via AgentBook.
-   * 
-   * For the hackathon, agents register their World ID in the agentId format:
-   * "agent_<nullifier_hash_prefix>"
-   * 
-   * In production, this would query the AgentBook registry on-chain or via API.
+   * Register an agent by verifying its human owner's World Selfie Check proof.
+   *
+   * This is the accountability link: the human verifies with World, we take
+   * their unique nullifier_hash, derive a stable agentId from it, and persist
+   * the agentId → nullifier_hash pair. If the agent later misbehaves, the
+   * agentId resolves back to exactly one verified human.
+   *
+   * The nullifier_hash is one-per-human, so one human maps to one agentId
+   * (re-registering is idempotent).
+   */
+  async registerAgentWithProof(proof: string): Promise<{ agentId: string } | null> {
+    const result = await verifySelfieCheckProof(proof);
+
+    if (!result.success || !result.nullifier_hash) {
+      return null;
+    }
+
+    // Derive a stable agentId from the human's nullifier_hash. Same human →
+    // same agentId, so the link is deterministic and one-per-human.
+    const agentId = `agent_${crypto
+      .createHash("sha256")
+      .update(result.nullifier_hash)
+      .digest("hex")
+      .substring(0, 16)}`;
+
+    // Persist the human↔agent link (idempotent, survives restarts).
+    upsertAgent(agentId, result.nullifier_hash);
+
+    return { agentId };
+  },
+
+  /**
+   * Resolve whether an agent is backed by a verified human.
+   *
+   * Checks the persistent agent registry: an agentId is backed only if it was
+   * created by registerAgentWithProof (i.e. a real human verified with World).
+   * A well-formed but unregistered id is NOT backed — closing the gap where
+   * any made-up agent_<hash> string used to pass.
    */
   async resolveAgentBacking(agentId: string): Promise<boolean> {
-    // Accept agent IDs in format: agent_<hash> where hash comes from World ID
     if (!agentId.startsWith("agent_")) {
       return false;
     }
-
-    // For hackathon: if it has the right format, consider it backed
-    // In production: verify against AgentBook registry
-    const agentHash = agentId.slice(6); // Remove "agent_" prefix
-    
-    // Basic validation: hash should be hexadecimal and reasonable length
-    if (!/^[0-9a-f]{16,64}$/i.test(agentHash)) {
-      return false;
-    }
-
-    // TODO: Query AgentBook when World provides the API/contract
-    // For now, accept well-formed agent IDs as human-backed
-    return true;
+    return isAgentRegistered(agentId);
   },
 };

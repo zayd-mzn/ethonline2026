@@ -22,6 +22,8 @@ export interface AgentConfig {
   maxSpendHbar: number;
   eventStreamPort: number;
   paymentMode: PaymentMode;
+  /** World Selfie Check proof for the agent's human owner (JSON string). */
+  worldProof?: string;
 }
 
 /** How the agent settles payments. */
@@ -120,5 +122,8 @@ export function loadConfig(): AgentConfig {
     // Default to "stub" so local/demo runs work without real funds. Set
     // PAYMENT_MODE=real to settle on-chain via Blocky402.
     paymentMode: parsePaymentMode(process.env.PAYMENT_MODE ?? "stub"),
+    // World Selfie Check proof for the agent's human owner. When set, the
+    // agent registers with the backend to obtain a human-backed agentId.
+    worldProof: process.env.WORLD_PROOF || undefined,
   };
 }

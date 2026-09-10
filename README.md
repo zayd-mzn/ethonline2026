@@ -116,12 +116,15 @@ Hedera network fee. Full details in [`docs/PAYMENTS.md`](docs/PAYMENTS.md).
 - **Provider onboarding — real.** Publishing a service (`POST /marketplace/services`)
   requires a valid **World Selfie Check** proof, verified against World's API. The
   `nullifier_hash` yields one stable provider ID per human (anti-sybil).
-- **Agent onboarding — partial.** The agent derives an `agent_<hash>` ID from its
-  Hedera account and sends it as an `X-Agent-Id` header on gated requests. When
-  `REQUIRE_AGENT_BACKING=true`, the backend rejects requests without a verified agent
-  identity with `403` **before** any payment is quoted (dev-bypass off by default so
-  local runs stay frictionless). Backing is currently resolved by format/presence, not
-  full AgentKit/AgentBook humanity — see [Known gaps](#current-status--known-gaps).
+- **Agent onboarding — real accountability link.** The agent's human owner verifies
+  with **World Selfie Check**, and the backend (`POST /agents/register`) ties the
+  resulting `agent_<hash>` ID to that human's `nullifier_hash`, persisted in the DB.
+  The agent sends this ID as an `X-Agent-Id` header on gated requests. When
+  `REQUIRE_AGENT_BACKING=true`, the backend rejects requests whose agent ID is **not**
+  in the verified registry with `403` **before** any payment is quoted (dev-bypass off
+  by default so local runs stay frictionless). Because the ID is derived from the
+  `nullifier_hash` (one per human), a misbehaving agent resolves back to exactly one
+  verified human — the accountability the marketplace needs.
 
 ---
 
@@ -242,6 +245,7 @@ Base URL: `http://localhost:3001`
 | `GET` | `/health` | Liveness + HCS topic id / HashScan link | — |
 | `GET` | `/marketplace/services` | List discoverable services | open |
 | `POST` | `/marketplace/services` | Publish a service | World Selfie Check |
+| `POST` | `/agents/register` | Register an agent to a verified human → `{ agentId }` | World Selfie Check |
 | `GET` | `/api/ip-reputation?ip=` | IP reputation → `{ ip, malicious, score }` | x402 payment |
 | `GET` | `/api/hash-check?hash=` | Hash check → `{ hash, detections, verdict }` | x402 payment |
 | `POST` | `/api/triage` | Stack-rank a list of indicators worst-first | open |
@@ -292,12 +296,12 @@ Type-check either package with `npm run typecheck`.
 - Backend and agent test suites passing; both type-check clean.
 
 **Known gaps**
-- **Agent human-backing is enforced at the edge, not by humanity.** The backend gates
-  `/api/*` behind an `X-Agent-Id` header when `REQUIRE_AGENT_BACKING=true`, returning
-  `403` before payment for missing/invalid identities (dev-bypass off by default).
-  However, `resolveAgentBacking` validates the `agent_<hash>` format only — it does not
-  yet resolve the ID to a real World-verified human via AgentBook. Swapping in real
-  AgentBook resolution upgrades the same seam with no route changes.
+- **Agent human-backing now resolves to a real human.** The agent's owner verifies
+  with World Selfie Check; `POST /agents/register` derives the `agent_<hash>` ID from
+  the human's `nullifier_hash` and persists the link in the DB. The payment gate
+  (`REQUIRE_AGENT_BACKING=true`) rejects any agent ID not in that verified registry
+  with `403` before payment. Format-only validation has been removed — a made-up ID no
+  longer passes.
 - Provider verified-state is held in memory (not yet persisted to the DB).
 - Real-payment mode requires an ECDSA key and a distinct recipient (documented).
 
