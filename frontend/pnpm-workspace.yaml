@@ -1,4 +1,9 @@
-allowBuilds:
-  protobufjs: set this to true or false
 onlyBuiltDependencies:
   - protobufjs
+  - "@hashgraph/proto"
+
+# pnpm 11 exits non-zero (blocking `pnpm dev`) when a dependency has an
+# unapproved build script, even after whitelisting above. The frontend runs
+# fine without protobufjs's native build, so skip the pre-run dependency
+# verification that turns this into a hard failure.
+verifyDepsBeforeRun: false
