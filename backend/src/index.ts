@@ -13,6 +13,7 @@ import { worldIdentity } from "./identity.js";
 import { lookupIpReputation, checkHash } from "./intel.js";
 import { triage } from "./triage.js";
 import { paymentGate } from "./paymentGate.js";
+import { agentGate } from "./agentGate.js";
 import { initHcsTopic, getTopicId } from "./hcsLogger.js";
 
 const PORT = Number(process.env.PORT ?? 3001);
@@ -79,7 +80,7 @@ app.post("/marketplace/services", async (request,reply) => {
 const priceFor = (resource: string) => getServiceByEndpoint(resource)?.priceHbar;
 
 app.get("/api/ip-reputation", 
-  { preHandler: paymentGate({ lookupPrice: priceFor, resource: "/api/ip-reputation" }) },
+  { preHandler: [agentGate(worldIdentity), paymentGate({ lookupPrice: priceFor, resource: "/api/ip-reputation" })] },
   async (request, reply) => {
   const ip = (request.query as { ip?: string }).ip;
   if (!ip) {
@@ -89,7 +90,7 @@ app.get("/api/ip-reputation",
 });
 
 app.get("/api/hash-check",
-  { preHandler: paymentGate({ lookupPrice: priceFor, resource: "/api/hash-check" }) },
+  { preHandler: [agentGate(worldIdentity), paymentGate({ lookupPrice: priceFor, resource: "/api/hash-check" })] },
   async (request, reply) => {
   const hash = (request.query as { hash?: string }).hash;
   if (!hash) {

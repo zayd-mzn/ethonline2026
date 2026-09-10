@@ -33,6 +33,8 @@ export interface InvestigationOptions {
   budget: Budget;
   payment: PaymentClient;
   fetchImpl?: FetchLike;
+  /** Agent identity presented to the backend for human-backing verification. */
+  agentId?: string;
 }
 
 const IPV4 = /^(\d{1,3}\.){3}\d{1,3}$/;
@@ -70,13 +72,13 @@ export async function investigate(
   indicators: string[],
   options: InvestigationOptions,
 ): Promise<ThreatReport> {
-  const { backendUrl, emitter, budget, payment, fetchImpl } = options;
+  const { backendUrl, emitter, budget, payment, fetchImpl, agentId } = options;
 
   // 1. Discover.
   const discovery = new DiscoveryClient({ backendUrl, emitter, fetchImpl });
   const services = await discovery.listServices();
 
-  const requester = new PaidRequester({ emitter, budget, payment, fetchImpl });
+  const requester = new PaidRequester({ emitter, budget, payment, fetchImpl, agentId });
   const findings: Finding[] = [];
 
   for (const indicator of indicators) {

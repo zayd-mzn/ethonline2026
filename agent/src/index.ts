@@ -80,6 +80,7 @@ async function main(): Promise<void> {
       emitter,
       budget,
       payment,
+      agentId: agentIdentity.agentId,
     });
     console.log("\n" + formatReport(report));
     console.log(`\nspent ${budget.totalSpent} HBAR of ${config.maxSpendHbar} cap`);

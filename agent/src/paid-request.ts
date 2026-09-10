@@ -19,12 +19,17 @@ import type { PaymentRequiredResponse, PaymentRequirement } from "./types.js";
 /** Header the agent uses to return payment proof — x402 v2 standard. */
 export const PAYMENT_PROOF_HEADER = "x-payment";
 
+/** Header the agent uses to present its human-backed identity. */
+export const AGENT_ID_HEADER = "x-agent-id";
+
 export interface PaidRequestOptions {
   emitter: ActivityEmitter;
   budget: Budget;
   payment: PaymentClient;
   fetchImpl?: FetchLike;
   timeoutMs?: number;
+  /** Agent identity sent on every request so the backend can verify backing. */
+  agentId?: string;
 }
 
 /** Narrow an unknown body into a PaymentRequirement, or null if it doesn't fit. */
@@ -57,6 +62,7 @@ export class PaidRequester {
   private readonly payment: PaymentClient;
   private readonly fetchImpl: FetchLike;
   private readonly timeoutMs: number;
+  private readonly agentId?: string;
 
   constructor(options: PaidRequestOptions) {
     this.emitter = options.emitter;
@@ -64,6 +70,12 @@ export class PaidRequester {
     this.payment = options.payment;
     this.fetchImpl = options.fetchImpl ?? (globalThis.fetch as FetchLike);
     this.timeoutMs = options.timeoutMs ?? 5000;
+    this.agentId = options.agentId;
+  }
+
+  /** Headers sent on every request, including the agent identity if set. */
+  private baseHeaders(): Record<string, string> | undefined {
+    return this.agentId ? { [AGENT_ID_HEADER]: this.agentId } : undefined;
   }
 
   private async fetchJson(
@@ -84,7 +96,7 @@ export class PaidRequester {
   /** Call `url`, handling a possible 402 by paying and retrying. */
   async request<T = unknown>(url: string): Promise<T> {
     this.emitter.emit("call", `GET ${url}`);
-    const first = await this.fetchJson(url);
+    const first = await this.fetchJson(url, this.baseHeaders());
 
     // Not gated (or already satisfied): return as-is if OK.
     if (first.status !== 402) {
@@ -126,6 +138,7 @@ export class PaidRequester {
 
     // Retry with proof attached.
     const second = await this.fetchJson(url, {
+      ...this.baseHeaders(),
       [PAYMENT_PROOF_HEADER]: proof.proof,
     });
     if (!second.ok) {

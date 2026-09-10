@@ -117,8 +117,11 @@ Hedera network fee. Full details in [`docs/PAYMENTS.md`](docs/PAYMENTS.md).
   requires a valid **World Selfie Check** proof, verified against World's API. The
   `nullifier_hash` yields one stable provider ID per human (anti-sybil).
 - **Agent onboarding — partial.** The agent derives an `agent_<hash>` ID from its
-  Hedera account. Full human-backing via AgentKit/AgentBook is not yet enforced on the
-  request path — see [Known gaps](#current-status--known-gaps).
+  Hedera account and sends it as an `X-Agent-Id` header on gated requests. When
+  `REQUIRE_AGENT_BACKING=true`, the backend rejects requests without a verified agent
+  identity with `403` **before** any payment is quoted (dev-bypass off by default so
+  local runs stay frictionless). Backing is currently resolved by format/presence, not
+  full AgentKit/AgentBook humanity — see [Known gaps](#current-status--known-gaps).
 
 ---
 
@@ -289,10 +292,12 @@ Type-check either package with `npm run typecheck`.
 - Backend and agent test suites passing; both type-check clean.
 
 **Known gaps**
-- **Agent human-backing is not enforced.** The `agent_<hash>` ID is format-validated
-  only, not resolved to a real World-verified human, and no route rejects unverified
-  agents yet. Decision pending: enforce server-side (403 before payment, with a
-  dev-bypass) vs. accept format-check for the demo.
+- **Agent human-backing is enforced at the edge, not by humanity.** The backend gates
+  `/api/*` behind an `X-Agent-Id` header when `REQUIRE_AGENT_BACKING=true`, returning
+  `403` before payment for missing/invalid identities (dev-bypass off by default).
+  However, `resolveAgentBacking` validates the `agent_<hash>` format only — it does not
+  yet resolve the ID to a real World-verified human via AgentBook. Swapping in real
+  AgentBook resolution upgrades the same seam with no route changes.
 - Provider verified-state is held in memory (not yet persisted to the DB).
 - Real-payment mode requires an ECDSA key and a distinct recipient (documented).
 

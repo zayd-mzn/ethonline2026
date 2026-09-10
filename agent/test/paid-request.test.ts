@@ -101,6 +101,27 @@ test("handles 402 by paying and retrying with the proof header", async () => {
   assert.equal(budget.totalSpent, 0.02);
 });
 
+test("attaches the X-Agent-Id header to both the initial call and the paid retry", async () => {
+  const { fetchImpl, calls } = scriptedFetch([
+    paymentRequired(),
+    { status: 200, body: { ip: "1.2.3.4", malicious: false, score: 0, source: "x" } },
+  ]);
+  const requester = new PaidRequester({
+    emitter: new ActivityEmitter(),
+    budget: new Budget(1.0),
+    payment: new StubPaymentClient(),
+    fetchImpl,
+    agentId: "agent_00000000deadbeef",
+  });
+
+  await requester.request("http://x/api/ip");
+
+  assert.equal(calls.length, 2);
+  assert.equal(calls[0].headers?.["x-agent-id"], "agent_00000000deadbeef");
+  assert.equal(calls[1].headers?.["x-agent-id"], "agent_00000000deadbeef");
+  assert.equal(calls[1].headers?.[PAYMENT_PROOF_HEADER], "stub-proof:req-1");
+});
+
 test("emits the call -> 402 -> paying -> paid stages", async () => {
   const emitter = new ActivityEmitter();
   const stages: string[] = [];
