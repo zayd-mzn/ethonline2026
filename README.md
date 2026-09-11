@@ -268,6 +268,7 @@ Base URL: `http://localhost:3001`
 |---|---|---|---|
 | `GET` | `/health` | Liveness + HCS topic id / HashScan link | — |
 | `GET` | `/agent-info` | Agent's fund-recipient account + network (for HashPack funding) | — |
+| `POST` | `/world/rp-signature` | World ID 4.0 config + server-signed `rp_context` (for IDKit) | — |
 | `GET` | `/marketplace/services` | List discoverable services | open |
 | `POST` | `/marketplace/services` | Publish a service | World Selfie Check |
 | `POST` | `/agents/register` | Register an agent to a verified human → `{ agentId }` | World Selfie Check |
