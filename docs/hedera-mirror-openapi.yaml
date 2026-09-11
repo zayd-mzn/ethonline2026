@@ -1,0 +1,116 @@
+openapi: 3.0.3
+info:
+  title: Hedera Mirror Node (Testnet)
+  version: "1.0"
+  description: >
+    Read-only access to the public Hedera Testnet Mirror Node. Exposes account
+    transaction history and balances so an agent can inspect on-chain activity
+    — for example, to extract the counterparties an account has transacted with
+    and then assess their risk. Public API, no authentication required.
+servers:
+  - url: https://testnet.mirrornode.hedera.com
+    description: Hedera Testnet public mirror node
+
+paths:
+  /api/v1/transactions:
+    get:
+      operationId: listAccountTransactions
+      summary: List recent transactions for a Hedera account
+      description: >
+        Returns recent transactions involving the given account. Each
+        transaction includes a `transfers` array of { account, amount } entries;
+        the counterparties are the other account IDs appearing in those
+        transfers. Use this to discover which accounts an account has been
+        transacting with.
+      parameters:
+        - name: account.id
+          in: query
+          required: true
+          description: The Hedera account ID to query, e.g. "0.0.10120034".
+          schema: { type: string }
+          example: "0.0.10120034"
+        - name: limit
+          in: query
+          required: false
+          description: Max number of transactions to return (1-100).
+          schema: { type: integer, default: 25, minimum: 1, maximum: 100 }
+          example: 10
+        - name: order
+          in: query
+          required: false
+          description: Sort order by consensus timestamp.
+          schema: { type: string, enum: [asc, desc], default: desc }
+          example: desc
+      responses:
+        "200":
+          description: A page of transactions
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/TransactionsResponse" }
+
+  /api/v1/accounts/{accountId}:
+    get:
+      operationId: getAccount
+      summary: Get an account's info and HBAR balance
+      description: >
+        Returns account details including current balance (in tinybars) and the
+        account's public key type. Useful context when assessing an account.
+      parameters:
+        - name: accountId
+          in: path
+          required: true
+          description: The Hedera account ID, e.g. "0.0.10120034".
+          schema: { type: string }
+          example: "0.0.10120034"
+      responses:
+        "200":
+          description: Account details
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AccountResponse" }
+
+components:
+  schemas:
+    TransactionsResponse:
+      type: object
+      properties:
+        transactions:
+          type: array
+          items: { $ref: "#/components/schemas/Transaction" }
+        links:
+          type: object
+          properties:
+            next: { type: string, nullable: true }
+
+    Transaction:
+      type: object
+      properties:
+        transaction_id: { type: string }
+        name: { type: string, description: "Transaction type, e.g. CRYPTOTRANSFER" }
+        consensus_timestamp: { type: string }
+        charged_tx_fee: { type: integer }
+        result: { type: string, example: SUCCESS }
+        transfers:
+          type: array
+          description: HBAR transfers in this transaction; counterparties are the accounts here.
+          items:
+            type: object
+            properties:
+              account: { type: string, example: "0.0.7162784" }
+              amount: { type: integer, description: "tinybars; positive = credit, negative = debit" }
+              is_approval: { type: boolean }
+
+    AccountResponse:
+      type: object
+      properties:
+        account: { type: string }
+        balance:
+          type: object
+          properties:
+            balance: { type: integer, description: "balance in tinybars" }
+            timestamp: { type: string }
+        key:
+          type: object
+          properties:
+            _type: { type: string, example: ECDSA_SECP256K1 }
+            key: { type: string }
