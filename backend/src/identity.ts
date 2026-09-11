@@ -8,70 +8,154 @@
 import type { IdentityVerifier } from "./types.js";
 import { upsertAgent, isAgentRegistered } from "./registry.js";
 import crypto from "node:crypto";
+import { getWorldRpConfig } from "./worldRp.js";
 
 // World ID app credentials from environment
 const WORLD_APP_ID = process.env.WORLD_APP_ID ?? "";
 const WORLD_ACTION = process.env.WORLD_ACTION ?? "publish-service";
 
+/** Result of verifying a World proof: the unique per-human nullifier. */
+interface ProofVerification {
+  success: boolean;
+  nullifier_hash?: string;
+}
+
+/** Looks like an IDKit 4.x result (protocol_version + responses[]). */
+function isIdKitV4Result(proof: unknown): proof is {
+  protocol_version: string;
+  responses: Array<{ nullifier?: string; session_nullifier?: string[] }>;
+} {
+  return (
+    typeof proof === "object" &&
+    proof !== null &&
+    typeof (proof as { protocol_version?: unknown }).protocol_version === "string" &&
+    Array.isArray((proof as { responses?: unknown }).responses)
+  );
+}
+
 /**
- * Verifies a World Selfie Check proof.
- * 
- * The proof is expected to be a JSON string containing:
- * - merkle_root: The root of the merkle tree
- * - nullifier_hash: Unique identifier preventing double-verification
- * - proof: The zero-knowledge proof
- * - verification_level: "orb" or "device"
- * 
- * In production, this calls the World ID verification API.
- * For Sandbox testing, use the Sandbox App credentials.
+ * Verify an IDKit 4.x result against World ID 4.0:
+ * POST https://developer.world.org/api/v4/verify/{rp_id}
+ *
+ * The payload is forwarded exactly as IDKit returned it (World requires no
+ * remapping). Works for both 4.0 proofs and legacy 3.0 proofs produced with
+ * `allow_legacy_proofs`.
  */
-async function verifySelfieCheckProof(proofString: string): Promise<{ success: boolean; nullifier_hash?: string }> {
-  try {
-    const proof = JSON.parse(proofString);
-    
-    // Required fields from World Selfie Check
-    if (!proof.merkle_root || !proof.nullifier_hash || !proof.proof) {
-      return { success: false };
-    }
-
-    // World ID verification endpoint
-    const verifyEndpoint = "https://developer.worldcoin.org/api/v1/verify";
-    
-    const verifyPayload = {
-      merkle_root: proof.merkle_root,
-      nullifier_hash: proof.nullifier_hash,
-      proof: proof.proof,
-      verification_level: proof.verification_level || "device",
-      action: WORLD_ACTION,
-      signal: "",  // Empty for Selfie Check (no additional data)
-    };
-
-    const response = await fetch(`${verifyEndpoint}/${WORLD_APP_ID}`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify(verifyPayload),
-    });
-
-    if (!response.ok) {
-      const error = await response.text();
-      console.error("World ID verification failed:", error);
-      return { success: false };
-    }
-
-    const result = (await response.json()) as { success?: boolean };
-    
-    if (result["success"]) {
-      return { 
-        success: true, 
-        nullifier_hash: proof.nullifier_hash 
-      };
-    }
-
+async function verifyWorldV4(proof: {
+  protocol_version: string;
+  responses: Array<{ nullifier?: string; session_nullifier?: string[] }>;
+}): Promise<ProofVerification> {
+  const { rpId } = getWorldRpConfig();
+  if (!rpId) {
+    console.error("World ID 4.0 verification skipped: WORLD_RP_ID is not set");
     return { success: false };
+  }
+
+  const response = await fetch(`https://developer.world.org/api/v4/verify/${rpId}`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(proof),
+    signal: AbortSignal.timeout(15000),
+  });
+
+  const result = (await response.json().catch(() => ({}))) as {
+    success?: boolean;
+    code?: string;
+    detail?: string;
+    results?: Array<{ identifier?: string; success?: boolean; nullifier?: string }>;
+  };
+
+  if (!response.ok || !result.success) {
+    console.error(
+      `World ID 4.0 verification failed (${response.status}): ${result.code ?? "unknown"} — ${result.detail ?? ""}`,
+    );
+    return { success: false };
+  }
+
+  // Prefer the nullifier World confirmed; fall back to the one in the proof.
+  const confirmed = result.results?.find((r) => r.success && r.nullifier)?.nullifier;
+  const fromProof =
+    proof.responses[0]?.nullifier ?? proof.responses[0]?.session_nullifier?.[0];
+  const nullifier = confirmed ?? fromProof;
+  if (!nullifier) {
+    console.error("World ID 4.0 verification succeeded but no nullifier was returned");
+    return { success: false };
+  }
+  return { success: true, nullifier_hash: nullifier };
+}
+
+/**
+ * Verify a legacy (IDKit 1.x/2.x) proof against the World ID 3.0 cloud API:
+ * POST https://developer.worldcoin.org/api/v1/verify/{app_id}
+ */
+async function verifyWorldLegacy(proof: {
+  merkle_root: string;
+  nullifier_hash: string;
+  proof: string;
+  verification_level?: string;
+}): Promise<ProofVerification> {
+  const verifyEndpoint = "https://developer.worldcoin.org/api/v1/verify";
+  const verifyPayload = {
+    merkle_root: proof.merkle_root,
+    nullifier_hash: proof.nullifier_hash,
+    proof: proof.proof,
+    verification_level: proof.verification_level || "device",
+    action: WORLD_ACTION,
+    signal: "",
+  };
+
+  const response = await fetch(`${verifyEndpoint}/${WORLD_APP_ID}`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(verifyPayload),
+  });
+
+  if (!response.ok) {
+    console.error("World ID verification failed:", await response.text());
+    return { success: false };
+  }
+
+  const result = (await response.json()) as { success?: boolean };
+  return result.success
+    ? { success: true, nullifier_hash: proof.nullifier_hash }
+    : { success: false };
+}
+
+/**
+ * Verifies a World proof captured by IDKit in the frontend.
+ *
+ * Accepts two wire formats:
+ * - IDKit 4.x result (`protocol_version`, `responses[]`) → World ID 4.0 verify.
+ * - Legacy IDKit result (`merkle_root`, `nullifier_hash`, `proof`) → v1 verify.
+ *
+ * Both resolve to the human's nullifier, which is what provider and agent
+ * identities are derived from.
+ */
+async function verifySelfieCheckProof(proofString: string): Promise<ProofVerification> {
+  try {
+    const proof: unknown = JSON.parse(proofString);
+
+    if (isIdKitV4Result(proof)) {
+      return await verifyWorldV4(proof);
+    }
+
+    const legacy = proof as {
+      merkle_root?: string;
+      nullifier_hash?: string;
+      proof?: string;
+      verification_level?: string;
+    };
+    if (!legacy.merkle_root || !legacy.nullifier_hash || !legacy.proof) {
+      return { success: false };
+    }
+    return await verifyWorldLegacy({
+      merkle_root: legacy.merkle_root,
+      nullifier_hash: legacy.nullifier_hash,
+      proof: legacy.proof,
+      verification_level: legacy.verification_level,
+    });
   } catch (err) {
-    console.error("Error verifying Selfie Check proof:", err);
+    console.error("Error verifying World proof:", err);
     return { success: false };
   }
 }

@@ -4,20 +4,43 @@
  * and /events to the agent event stream.
  * In production set VITE_BACKEND_URL and VITE_AGENT_URL.
  */
+// In dev, default to a relative base ("") so requests go through Vite's proxy
+// (same-origin, no CORS). The backend does not send CORS headers. Set
+// VITE_BACKEND_URL for production builds served from another origin.
 export const BACKEND_URL =
-  (import.meta.env.VITE_BACKEND_URL as string | undefined) ?? "http://localhost:3001";
+  (import.meta.env.VITE_BACKEND_URL as string | undefined) ??
+  (import.meta.env.DEV ? "" : "http://localhost:3001");
 
 export const AGENT_EVENTS_URL =
   (import.meta.env.VITE_AGENT_URL as string | undefined) ?? "http://localhost:3002";
 
-/** World ID app id (public — ships in the bundle). From the World Dev Portal. */
-export const WORLD_APP_ID =
-  (import.meta.env.VITE_WORLD_APP_ID as `app_${string}` | undefined) ??
-  "app_e2c0af203369e1d934c1782a8abd051a";
+/**
+ * World ID 4.0 request config, served by the backend (POST /world/rp-signature).
+ * The backend owns app id, action, environment and the RP signing key, so the
+ * frontend never needs World env vars and can't drift out of sync with it.
+ */
+export interface WorldRequestConfig {
+  app_id: `app_${string}`;
+  action: string;
+  /** "staging" = test with simulator.worldcoin.org; "production" = real World App. */
+  environment: "production" | "staging";
+  rp_context: {
+    rp_id: string;
+    nonce: string;
+    created_at: number;
+    expires_at: number;
+    signature: string;
+  };
+}
 
-/** World Incognito Action — must match the backend's WORLD_ACTION. */
-export const WORLD_ACTION =
-  (import.meta.env.VITE_WORLD_ACTION as string | undefined) ?? "publish-service";
+/** Ask the backend for a fresh, signed World ID request. Call right before opening IDKit. */
+export function fetchWorldRequestConfig(): Promise<WorldRequestConfig> {
+  return apiFetch<WorldRequestConfig>(`${BACKEND_URL}/world/rp-signature`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: "{}",
+  });
+}
 
 /** Shared fetch wrapper — throws on non-2xx with the API error message. */
 export async function apiFetch<T>(url: string, init?: RequestInit): Promise<T> {

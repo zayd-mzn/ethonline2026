@@ -29,8 +29,8 @@ import { AgentTimeline } from "./components/AgentTimeline";
 import { ServiceGrid } from "./components/ServiceGrid";
 import { BackgroundBeams } from "./components/ui/background-beams";
 import { GitHubGlobe } from "./components/ui/github-globe";
-import { apiFetch, BACKEND_URL, AGENT_EVENTS_URL, WORLD_APP_ID, WORLD_ACTION } from "./api";
-import { IDKitWidget, VerificationLevel, type ISuccessResult } from "@worldcoin/idkit";
+import { apiFetch, BACKEND_URL, AGENT_EVENTS_URL, fetchWorldRequestConfig, type WorldRequestConfig } from "./api";
+import { IDKitRequestWidget, proofOfHuman, type IDKitResult } from "@worldcoin/idkit";
 import {
   connectHashPack,
   disconnectHashPack,
@@ -665,11 +665,36 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
 }
 
 function Verification({ verified, complete }: { verified: boolean; complete: (proof: string) => void }) {
-  // IDKit calls this after a successful World verification. We forward the full
-  // proof (as JSON) up to App state so it can be sent to the backend on publish.
-  const onSuccess = (result: ISuccessResult) => {
+  // World ID 4.0 flow: ask the backend for a signed request (rp_context), then
+  // open IDKit. On success we forward the full IDKit result (as JSON) up to App
+  // state so it can be sent to the backend on publish, which verifies it with
+  // World's /api/v4/verify/{rp_id}.
+  const [open, setOpen] = useState(false);
+  const [config, setConfig] = useState<WorldRequestConfig | null>(null);
+  const [preparing, setPreparing] = useState(false);
+  const [error, setError] = useState("");
+
+  async function start() {
+    setError("");
+    setPreparing(true);
+    try {
+      const cfg = await fetchWorldRequestConfig();
+      setConfig(cfg);
+      setOpen(true);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setPreparing(false);
+    }
+  }
+
+  const onSuccess = (result: IDKitResult) => {
     complete(JSON.stringify(result));
   };
+
+  const scanHint = config?.environment === "staging"
+    ? "Staging mode: open simulator.worldcoin.org and paste the QR link."
+    : "Scan the QR with the World App on your phone.";
 
   return (
     <section className="view-enter pb-20"><div className="mx-auto max-w-3xl text-center"><PageHead eyebrow="WORLD IDENTITY" title="Prove personhood, preserve privacy" text="One human, one provider. Verification prevents sybil abuse without exposing personal information." /></div>
@@ -680,19 +705,24 @@ function Verification({ verified, complete }: { verified: boolean; complete: (pr
         {verified ? (
           <button disabled className="flex w-full items-center justify-center gap-2 rounded bg-[#b8f34b] py-3 text-xs font-bold text-[#07100d] disabled:opacity-60"><Check size={17} />Verification complete</button>
         ) : (
-          <IDKitWidget
-            app_id={WORLD_APP_ID}
-            action={WORLD_ACTION}
-            signal=""
-            verification_level={VerificationLevel.Device}
-            onSuccess={onSuccess}
-          >
-            {({ open }: { open: () => void }) => (
-              <button onClick={open} className="flex w-full items-center justify-center gap-2 rounded bg-[#b8f34b] py-3 text-xs font-bold text-[#07100d]"><ScanFace size={17} />Verify with World ID</button>
-            )}
-          </IDKitWidget>
+          <button onClick={start} disabled={preparing} className="flex w-full items-center justify-center gap-2 rounded bg-[#b8f34b] py-3 text-xs font-bold text-[#07100d] disabled:opacity-60"><ScanFace size={17} />{preparing ? "Preparing request…" : "Verify with World ID"}</button>
         )}
-        <small className="mt-3 block text-[8px] tracking-[.12em] text-[#51655d]">WORLD ID · SCAN WITH WORLD APP OR SIMULATOR</small>
+        {config && !verified && (
+          <IDKitRequestWidget
+            open={open}
+            onOpenChange={setOpen}
+            app_id={config.app_id}
+            action={config.action}
+            rp_context={config.rp_context}
+            environment={config.environment}
+            allow_legacy_proofs={true}
+            preset={proofOfHuman()}
+            onSuccess={onSuccess}
+            onError={(code) => setError(`World ID error: ${code}`)}
+          />
+        )}
+        {error && <p className="mt-3 text-[10px] leading-5 text-[#ff6b6b]">{error}</p>}
+        <small className="mt-3 block text-[8px] tracking-[.12em] text-[#51655d]">{config ? scanHint.toUpperCase() : "WORLD ID · SCAN WITH WORLD APP OR SIMULATOR"}</small>
       </div>
     </section>
   );

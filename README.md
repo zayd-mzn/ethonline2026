@@ -330,44 +330,32 @@ Type-check either package with `npm run typecheck`.
 - Provider verified-state is held in memory (not yet persisted to the DB).
 - Real-payment mode requires an ECDSA key and a distinct recipient (documented).
 
-### ⚠️ Active blocker — frontend World ID verification (staging vs production)
+### World ID 4.0 (resolved blocker — staging vs production)
 
-**Status:** the real World ID flow is wired end-to-end but not yet passing a live
-verification, due to a World-app environment mismatch. Handing off to the next owner.
+The frontend now uses **IDKit 4** (`@worldcoin/idkit@4.x`) and the backend verifies
+proofs with **World ID 4.0** (`POST /api/v4/verify/{rp_id}`). The old blocker was that
+the World Developer Portal no longer creates `app_staging_…` apps: **staging is now a
+property of the action and of the IDKit request**, and the Simulator only accepts
+requests sent with `environment: "staging"`.
 
-**What's done**
-- Frontend `Verification` screen uses the real **IDKit** (`@worldcoin/idkit@1.5.0`)
-  `IDKitWidget` — no more placeholder `setVerified(true)`. It opens a real QR, and on
-  success forwards the actual proof.
-- The captured proof is sent to the backend as `X-Selfie-Check-Proof` on
-  `POST /marketplace/services` (the hardcoded `"stub-proof"` is gone).
-- Backend already verifies proofs against World's API using `WORLD_APP_ID` /
-  `WORLD_ACTION` (must match the frontend's `VITE_WORLD_APP_ID` / `VITE_WORLD_ACTION`).
-- Vite alias added for `@worldcoin/idkit` (its package `main` points at raw TS and
-  crashes the browser otherwise — see `vite.config.ts`).
-- World app + `publish-service` action created; app id `app_e2c0af203369e1d934c1782a8abd051a`.
+**How it works**
+- `POST /world/rp-signature` (backend) returns the public World config plus a fresh RP
+  signature (`rp_context`). The RP signing key never leaves the backend.
+- The `Verification` screen opens `IDKitRequestWidget` with that config and forwards the
+  full IDKit result to the backend as `X-Selfie-Check-Proof` when publishing / registering.
+- The backend forwards the result as-is to World's v4 verify endpoint and derives the
+  provider / agent id from the returned nullifier. Legacy IDKit 1.x proofs are still
+  accepted via the v1 endpoint.
 
-**The blocker**
-- The World **Simulator** (`simulator.worldcoin.org`) only accepts **staging** requests
-  and rejects our request with: *"Production request detected — set
-  `environment: "staging"` in your request payload."*
-- Our World app is a **production** app, and **IDKit 1.5.0 has no `environment` prop**
-  (confirmed — it hardcodes production; the `environment: "staging"` field only exists
-  in IDKit v2+). So we can't flip it in code with the current version.
-
-**Two ways forward (pick one)**
-1. **Create a staging World app** and use its `app_staging_...` id — IDKit 1.5.0 routes
-   to staging automatically for staging apps, and the Simulator will accept it. (The
-   new World portal makes the staging option hard to find; that's the sticking point.)
-2. **Upgrade IDKit to v2+** and pass `environment: "staging"` explicitly. Bigger change:
-   v4's API is a rewrite (no `IDKitWidget`) — would need the verify screen rebuilt.
-   Alternatively, verify with a **real World App on a phone** against the production app
-   (no simulator needed), which is the most demo-legit but needs an orb/device account.
-
-**Config touch-points if the app id changes**
-- `frontend/.env.local` → `VITE_WORLD_APP_ID`, `VITE_WORLD_ACTION`
-- `frontend/src/api.ts` → default `WORLD_APP_ID` / `WORLD_ACTION`
-- `backend/.env` → `WORLD_APP_ID`, `WORLD_ACTION` (must match the frontend)
+**Portal setup (once)**
+1. Developer Portal → your app → *World ID Configuration* → **Register relying party**.
+   Copy `app_id`, `rp_id` and the signing key (shown once).
+2. Create the action `publish-service`. The dashboard creates it in **production**;
+   for Simulator testing also create it in **staging** through the Developer Portal MCP
+   (`create_world_id_action` with `environment: "staging"`).
+3. `backend/.env`: `WORLD_APP_ID`, `WORLD_ACTION`, `WORLD_RP_ID`, `RP_SIGNING_KEY`, and
+   `WORLD_ENVIRONMENT=staging` (Simulator) or `production` (real World App).
+   The frontend needs no World env vars.
 
 ---
 

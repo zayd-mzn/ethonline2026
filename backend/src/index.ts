@@ -15,6 +15,7 @@ import { triage } from "./triage.js";
 import { paymentGate } from "./paymentGate.js";
 import { agentGate } from "./agentGate.js";
 import { initHcsTopic, getTopicId } from "./hcsLogger.js";
+import { getWorldRpConfig, isWorldV4Configured, signRpRequest } from "./worldRp.js";
 
 const PORT = Number(process.env.PORT ?? 3001);
 const HOST = process.env.HOST ?? "0.0.0.0";
@@ -41,6 +42,28 @@ app.get("/agent-info", async () => {
   return {
     agentAccountId: process.env.AGENT_ACCOUNT_ID ?? null,
     network: process.env.HEDERA_NETWORK ?? "testnet",
+  };
+});
+
+// World ID 4.0: public config + a fresh RP signature so the frontend can open
+// IDKit. The signing key never leaves this server. The frontend calls this
+// right before showing the QR; signatures are short-lived.
+app.post("/world/rp-signature", async (request, reply) => {
+  const cfg = getWorldRpConfig();
+  if (!isWorldV4Configured()) {
+    return reply.code(503).send({
+      error: "world_not_configured",
+      message: "Set WORLD_RP_ID and RP_SIGNING_KEY in backend/.env (Developer Portal > World ID Configuration)",
+    });
+  }
+  const body = (request.body ?? {}) as { action?: string };
+  const action = typeof body.action === "string" && body.action ? body.action : cfg.action;
+  const signature = signRpRequest(action);
+  return {
+    app_id: cfg.appId,
+    action,
+    environment: cfg.environment,
+    rp_context: signature,
   };
 });
 
