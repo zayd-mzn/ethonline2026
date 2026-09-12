@@ -6,13 +6,13 @@ import { Color, Fog, MeshPhongMaterial } from "three";
 import world from "../../data/world.json";
 
 // ── colour tokens ─────────────────────────────────────────────────────────────
-const GLOBE_BASE      = "#0a1628"; // deep ocean navy
-const CONTINENT_DOT   = "#4a5f7a"; // visible slate-blue against the ocean
-const HEDERA_PURPLE   = "#8259f5";
-const WORLD_GREEN     = "#b8ff5a";
-const ATMOSPHERE      = "#8259f5";
+const GLOBE_BASE      = "#071225"; // deep ocean navy
+const CONTINENT_DOT   = "#3f6da8"; // visible slate-blue against the ocean
+const BRAND_VIOLET   = "#7c3aed";
+const BRAND_CYAN      = "#18d5f2";
+const ATMOSPHERE      = "#2584ff";
 
-const ARC_COLORS = [HEDERA_PURPLE, "#9d7cff", WORLD_GREEN, "#c4fc7a"];
+const ARC_COLORS = [BRAND_CYAN, "#2584ff", BRAND_VIOLET, "#a78bfa"];
 
 // ── arc / node data ────────────────────────────────────────────────────────────
 interface ArcDatum {
@@ -47,7 +47,7 @@ const ringPoints: PointDatum[] = Array.from(
 function SceneFog() {
   const { scene } = useThree();
   useEffect(() => {
-    scene.fog = new Fog("#07100d", 260, 390);
+    scene.fog = new Fog("#020817", 260, 390);
     return () => { scene.fog = null; };
   }, [scene]);
   return null;
@@ -61,7 +61,7 @@ function GlobeObject() {
     // ── base sphere ──────────────────────────────────────────────────────────
     const mat = globe.globeMaterial() as MeshPhongMaterial;
     mat.color            = new Color(GLOBE_BASE);
-    mat.emissive         = new Color("#050e1a");
+    mat.emissive         = new Color("#030b1d");
     mat.emissiveIntensity = 0.18;
     mat.shininess        = 12;
 
@@ -136,9 +136,9 @@ export function GitHubGlobe() {
         <Suspense fallback={null}>
           <SceneFog />
           <ambientLight   color="#ffffff"  intensity={0.6} />
-          <directionalLight color={WORLD_GREEN}   position={[-120, 80, 120]} intensity={0.8} />
-          <directionalLight color={HEDERA_PURPLE} position={[120, -80, 90]}  intensity={1.3} />
-          <pointLight       color={HEDERA_PURPLE} position={[0, 160, -120]}  intensity={12} />
+          <directionalLight color={BRAND_CYAN}   position={[-120, 80, 120]} intensity={0.8} />
+          <directionalLight color={BRAND_VIOLET} position={[120, -80, 90]}  intensity={1.3} />
+          <pointLight       color={BRAND_VIOLET} position={[0, 160, -120]}  intensity={12} />
           <GlobeObject />
           <OrbitControls
             enablePan={false}

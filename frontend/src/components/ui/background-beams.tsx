@@ -1,13 +1,13 @@
 import { motion } from "framer-motion";
 
 const beams = [
-  { left: "6%",  delay: 0.2, duration: 5.2, color: "#9333ea" },
-  { left: "18%", delay: 3.1, duration: 6.4, color: "#b8f34b" },
-  { left: "31%", delay: 1.4, duration: 4.8, color: "#9333ea" },
-  { left: "47%", delay: 0.6, duration: 5.6, color: "#b8f34b" },
-  { left: "62%", delay: 2.8, duration: 4.4, color: "#9333ea" },
-  { left: "76%", delay: 1.9, duration: 6.0, color: "#b8f34b" },
-  { left: "89%", delay: 3.7, duration: 5.0, color: "#9333ea" },
+  { left: "6%",  delay: 0.2, duration: 5.2, color: "var(--cim-violet)" },
+  { left: "18%", delay: 3.1, duration: 6.4, color: "var(--cim-cyan)" },
+  { left: "31%", delay: 1.4, duration: 4.8, color: "var(--cim-violet)" },
+  { left: "47%", delay: 0.6, duration: 5.6, color: "var(--cim-cyan)" },
+  { left: "62%", delay: 2.8, duration: 4.4, color: "var(--cim-violet)" },
+  { left: "76%", delay: 1.9, duration: 6.0, color: "var(--cim-cyan)" },
+  { left: "89%", delay: 3.7, duration: 5.0, color: "var(--cim-violet)" },
 ];
 
 // 8 spark angles in degrees (0 = up, clockwise)
@@ -94,7 +94,7 @@ export function BackgroundBeams() {
       aria-hidden="true"
     >
       {/* ambient radial glows */}
-      <div className="absolute inset-0 bg-[radial-gradient(circle_at_72%_18%,rgba(147,51,234,0.09),transparent_32%),radial-gradient(circle_at_14%_78%,rgba(184,243,75,0.05),transparent_28%)]" />
+      <div className="absolute inset-0 bg-[radial-gradient(circle_at_72%_18%,rgba(124,58,237,0.12),transparent_32%),radial-gradient(circle_at_14%_78%,rgba(24,213,242,0.07),transparent_28%)]" />
 
       {/* beam trails */}
       {beams.map((beam, index) => (
@@ -136,7 +136,7 @@ export function BackgroundBeams() {
       })}
 
       {/* collision floor line */}
-      <div className="absolute inset-x-0 bottom-0 h-px bg-gradient-to-r from-transparent via-[#9333ea]/50 to-transparent" />
+      <div className="absolute inset-x-0 bottom-0 h-px bg-gradient-to-r from-transparent via-cim-violet/50 to-transparent" />
     </div>
   );
 }

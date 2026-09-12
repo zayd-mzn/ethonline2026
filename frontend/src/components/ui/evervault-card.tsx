@@ -31,18 +31,18 @@ export function EvervaultCard({
   return (
     <motion.article
       className={cn(
-        "group relative min-h-[310px] overflow-hidden border border-[#1d3029] bg-[#07100d]",
+        "group relative min-h-[310px] overflow-hidden border border-cim-border bg-cim-canvas",
         className,
       )}
       onHoverStart={() => setHovered(true)}
       onHoverEnd={() => setHovered(false)}
-      whileHover={{ borderColor: "rgba(147,51,234,0.65)" }}
+      whileHover={{ borderColor: "rgba(124,58,237,0.7)" }}
       transition={{ duration: 0.2 }}
     >
       <AnimatePresence>
         {hovered && (
           <motion.div
-            className="pointer-events-none absolute inset-0 z-10 overflow-hidden bg-black/94 p-3 font-mono text-[9px] leading-[1.55] text-[#9333ea]/55"
+            className="pointer-events-none absolute inset-0 z-10 overflow-hidden bg-cim-canvas/95 p-3 font-mono text-[9px] leading-[1.55] text-cim-violet-soft/60"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
@@ -56,7 +56,7 @@ export function EvervaultCard({
             </div>
 
             {/* dark vignette so center text pops */}
-            <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,transparent_30%,black_80%)]" />
+            <div className="absolute inset-0" style={{ background: "radial-gradient(circle at center, transparent 30%, var(--cim-canvas) 80%)" }} />
 
             {/* service name revealed in center */}
             <motion.div
@@ -65,14 +65,14 @@ export function EvervaultCard({
               animate={{ scale: 1, opacity: 1 }}
               transition={{ duration: 0.22 }}
             >
-              <span className="text-center font-sans text-2xl font-semibold tracking-tight text-white drop-shadow-[0_0_20px_#9333ea]">
+              <span className="text-center font-sans text-2xl font-semibold tracking-tight text-cim-text drop-shadow-[0_0_20px_rgba(124,58,237,0.8)]">
                 {title}
               </span>
             </motion.div>
 
             {/* scan line */}
             <motion.div
-              className="absolute inset-x-0 h-px bg-[#b8f34b]/75 shadow-[0_0_14px_#b8f34b]"
+              className="absolute inset-x-0 h-px bg-cim-cyan/75 shadow-[0_0_14px_rgba(24,213,242,0.8)]"
               animate={{ top: ["0%", "100%"] }}
               transition={{ duration: 1.6, repeat: Infinity, ease: "linear" }}
             />

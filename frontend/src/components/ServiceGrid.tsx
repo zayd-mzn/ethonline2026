@@ -21,7 +21,7 @@ export function ServiceGrid({
   onTry:    () => void;
 }) {
   return (
-    <div className="grid grid-cols-1 gap-0 border border-[#1d3029] lg:grid-cols-3">
+    <div className="grid grid-cols-1 gap-0 border border-cim-border lg:grid-cols-3">
       {services.map((service, index) => {
         const isIp = service.type === "ip";
         const Icon = isIp ? Globe2 : Hash;
@@ -32,7 +32,7 @@ export function ServiceGrid({
             className={[
               index % 3 !== 2 ? "lg:border-r"  : "",
               index < services.length - 3 ? "border-b" : "",
-              "border-[#1d3029]",
+              "border-cim-border",
             ].join(" ")}
             initial={{ opacity: 0, y: 16 }}
             animate={{ opacity: 1, y: 0 }}
@@ -44,13 +44,13 @@ export function ServiceGrid({
                 <div className="flex items-center justify-between">
                   <span className={`grid h-10 w-10 place-items-center rounded border ${
                     isIp
-                      ? "border-[#285246] bg-[#0d2921] text-[#55e6c2]"
-                      : "border-[#5f4929] bg-[#2a2111] text-[#ffbd59]"
+                      ? "border-cim-cyan/30 bg-cim-blue/10 text-cim-cyan"
+                      : "border-cim-violet/30 bg-cim-violet/10 text-cim-violet-soft"
                   }`}>
                     <Icon size={20} />
                   </span>
                   <div className="flex flex-col items-end gap-1.5">
-                    <span className="flex items-center gap-1 font-mono text-[8px] font-bold tracking-[.1em] text-[#b8f34b]">
+                    <span className="flex items-center gap-1 font-mono text-[8px] font-bold tracking-[.1em] text-cim-success">
                       <ShieldCheck size={12} /> VERIFIED
                     </span>
                     {service.bazantic && (
@@ -62,24 +62,24 @@ export function ServiceGrid({
                 </div>
 
                 {/* title + description */}
-                <h3 className="mt-6 text-lg font-semibold text-white">{service.name}</h3>
-                <p className="mt-2 flex-1 text-xs leading-6 text-[#82988f]">{service.description}</p>
+                <h3 className="mt-6 text-lg font-semibold text-cim-text">{service.name}</h3>
+                <p className="mt-2 flex-1 text-xs leading-6 text-cim-muted">{service.description}</p>
 
                 {/* stats */}
-                <div className="my-4 grid grid-cols-2 border-y border-[#1d3029] py-3 font-mono text-[9px] text-[#667b72]">
-                  <span><b className="block text-[#b6c6c0]">{service.latency}</b>P50 LATENCY</span>
-                  <span><b className="block text-[#b6c6c0]">{service.calls}</b>PAID CALLS</span>
+                <div className="my-4 grid grid-cols-2 border-y border-cim-border py-3 font-mono text-[9px] text-cim-subtle">
+                  <span><b className="block text-cim-text">{service.latency}</b>P50 LATENCY</span>
+                  <span><b className="block text-cim-text">{service.calls}</b>PAID CALLS</span>
                 </div>
 
                 {/* price + cta */}
                 <div className="flex items-center justify-between">
                   <div>
-                    <strong className="text-lg text-[#b8f34b]">{service.price}</strong>
-                    <small className="font-mono text-[8px] text-[#82988f]"> HBAR/query</small>
+                    <strong className="text-lg text-cim-cyan">{service.price}</strong>
+                    <small className="font-mono text-[8px] text-cim-muted"> HBAR/query</small>
                   </div>
                   <button
                     onClick={onTry}
-                    className="flex items-center gap-1 font-mono text-[10px] font-bold text-[#55e6c2] transition hover:text-white"
+                    className="flex items-center gap-1 font-mono text-[10px] font-bold text-cim-cyan transition hover:text-cim-text"
                   >
                     Try with agent <ChevronRight size={13} />
                   </button>
