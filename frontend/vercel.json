@@ -1,0 +1,17 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "buildCommand": "pnpm build",
+  "outputDirectory": "dist",
+  "installCommand": "pnpm install",
+  "framework": "vite",
+  "rewrites": [
+    { "source": "/marketplace/:path*", "destination": "https://cim-backend.onrender.com/marketplace/:path*" },
+    { "source": "/api/:path*",         "destination": "https://cim-backend.onrender.com/api/:path*" },
+    { "source": "/agents/:path*",      "destination": "https://cim-backend.onrender.com/agents/:path*" },
+    { "source": "/world/:path*",       "destination": "https://cim-backend.onrender.com/world/:path*" },
+    { "source": "/agent-info",         "destination": "https://cim-backend.onrender.com/agent-info" },
+    { "source": "/health",             "destination": "https://cim-backend.onrender.com/health" },
+    { "source": "/events",             "destination": "https://cim-agent.onrender.com/events" },
+    { "source": "/activity",           "destination": "https://cim-agent.onrender.com/activity" }
+  ]
+}

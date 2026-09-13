@@ -2,17 +2,19 @@
  * Central API configuration.
  * In dev Vite proxies /api and /marketplace to the backend,
  * and /events to the agent event stream.
- * In production set VITE_BACKEND_URL and VITE_AGENT_URL.
+ * In production the site is served behind vercel.json rewrites that forward
+ * these same relative paths to the hosted backend/agent, so both bases default
+ * to "" (same-origin). Override with VITE_BACKEND_URL / VITE_AGENT_URL only if
+ * you want to bypass the rewrites and call the hosts cross-origin (needs CORS).
  */
-// In dev, default to a relative base ("") so requests go through Vite's proxy
-// (same-origin, no CORS). The backend does not send CORS headers. Set
-// VITE_BACKEND_URL for production builds served from another origin.
+// Default to a relative base ("") in both dev and prod so requests stay
+// same-origin — dev via Vite's proxy, prod via Vercel rewrites. The backend
+// does not send CORS headers, so same-origin is required unless you add CORS.
 export const BACKEND_URL =
-  (import.meta.env.VITE_BACKEND_URL as string | undefined) ??
-  (import.meta.env.DEV ? "" : "http://localhost:3001");
+  (import.meta.env.VITE_BACKEND_URL as string | undefined) ?? "";
 
 export const AGENT_EVENTS_URL =
-  (import.meta.env.VITE_AGENT_URL as string | undefined) ?? "http://localhost:3002";
+  (import.meta.env.VITE_AGENT_URL as string | undefined) ?? "";
 
 /**
  * World ID 4.0 request config, served by the backend (POST /world/rp-signature).
