@@ -5,14 +5,14 @@
   "installCommand": "pnpm install",
   "framework": "vite",
   "rewrites": [
-    { "source": "/marketplace/:path*", "destination": "https://cim-backend.onrender.com/marketplace/:path*" },
-    { "source": "/api/:path*",         "destination": "https://cim-backend.onrender.com/api/:path*" },
-    { "source": "/agents/:path*",      "destination": "https://cim-backend.onrender.com/agents/:path*" },
-    { "source": "/world/:path*",       "destination": "https://cim-backend.onrender.com/world/:path*" },
-    { "source": "/agent-info",         "destination": "https://cim-backend.onrender.com/agent-info" },
-    { "source": "/health",             "destination": "https://cim-backend.onrender.com/health" },
-    { "source": "/events",             "destination": "https://cim-agent.onrender.com/events" },
-    { "source": "/activity",           "destination": "https://cim-agent.onrender.com/activity" },
-    { "source": "/investigate",        "destination": "https://cim-agent.onrender.com/investigate" }
+    { "source": "/marketplace/:path*", "destination": "https://cim-backend.up.railway.app/marketplace/:path*" },
+    { "source": "/api/:path*",         "destination": "https://cim-backend.up.railway.app/api/:path*" },
+    { "source": "/agents/:path*",      "destination": "https://cim-backend.up.railway.app/agents/:path*" },
+    { "source": "/world/:path*",       "destination": "https://cim-backend.up.railway.app/world/:path*" },
+    { "source": "/agent-info",         "destination": "https://cim-backend.up.railway.app/agent-info" },
+    { "source": "/health",             "destination": "https://cim-backend.up.railway.app/health" },
+    { "source": "/events",             "destination": "https://cim-agent.up.railway.app/events" },
+    { "source": "/activity",           "destination": "https://cim-agent.up.railway.app/activity" },
+    { "source": "/investigate",        "destination": "https://cim-agent.up.railway.app/investigate" }
   ]
 }

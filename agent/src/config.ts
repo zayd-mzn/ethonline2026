@@ -117,7 +117,9 @@ export function loadConfig(): AgentConfig {
     ),
     eventStreamPort: parsePort(
       "EVENT_STREAM_PORT",
-      process.env.EVENT_STREAM_PORT ?? "3002",
+      // Prefer EVENT_STREAM_PORT; fall back to the platform-injected PORT
+      // (Railway/Render set PORT per service), then the local default 3002.
+      process.env.EVENT_STREAM_PORT ?? process.env.PORT ?? "3002",
     ),
     // Default to "stub" so local/demo runs work without real funds. Set
     // PAYMENT_MODE=real to settle on-chain via Blocky402.
