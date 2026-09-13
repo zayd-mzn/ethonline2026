@@ -3,6 +3,9 @@ import react from "@vitejs/plugin-react";
 import tailwindcss from "@tailwindcss/vite";
 
 export default defineConfig({
+  // GitHub Pages serves the project site from /<repo>/. Overridable via BASE_PATH
+  // (e.g. set to "/" for a custom domain or user/organization page).
+  base: process.env.BASE_PATH ?? "/ethonline2026/",
   plugins: [react(), tailwindcss()],
   server: {
     port: 5173,
