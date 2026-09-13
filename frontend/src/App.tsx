@@ -182,10 +182,29 @@ function App() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  function investigate() {
+  async function investigate() {
     if (running) return;
     setView("monitor");
+    // Connect the live stream first so we don't miss early events.
     connectSSE();
+    // Then ask the agent to start a fresh run. 202 = started, 409 = a run is
+    // already in flight (we just watch it), anything else = agent can't run on
+    // demand (e.g. older build) — we still show whatever it has buffered.
+    try {
+      const res = await fetch(`${AGENT_EVENTS_URL}/investigate`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: "{}",
+      });
+      if (!res.ok && res.status !== 409) {
+        // Not fatal: leave the stream connected to replay buffered events.
+        console.warn(`agent /investigate returned ${res.status}`);
+      }
+    } catch (err) {
+      console.warn(
+        `could not trigger agent run: ${err instanceof Error ? err.message : String(err)}`,
+      );
+    }
   }
 
   // ── provider publish ──────────────────────────────────────────────

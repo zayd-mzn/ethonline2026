@@ -12,6 +12,7 @@
     { "source": "/agent-info",         "destination": "https://cim-backend.onrender.com/agent-info" },
     { "source": "/health",             "destination": "https://cim-backend.onrender.com/health" },
     { "source": "/events",             "destination": "https://cim-agent.onrender.com/events" },
-    { "source": "/activity",           "destination": "https://cim-agent.onrender.com/activity" }
+    { "source": "/activity",           "destination": "https://cim-agent.onrender.com/activity" },
+    { "source": "/investigate",        "destination": "https://cim-agent.onrender.com/investigate" }
   ]
 }
