@@ -8,11 +8,10 @@ info:
     stack-ranked worst-first. Intel-serving endpoints are metered per query and
     settled via x402 (HTTP 402 Payment Required) on Hedera.
 servers:
+  - url: https://ethonline2026-production.up.railway.app
+    description: Public deployment (Railway) consumed by the Bazantic gateway
   - url: http://localhost:3001
     description: Local development
-  # Replace with your public/tunnel URL when registering the Bazantic gateway.
-  # - url: https://your-public-host
-  #   description: Public deployment consumed by the Bazantic gateway
 
 paths:
   /health:

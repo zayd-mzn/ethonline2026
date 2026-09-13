@@ -12,6 +12,9 @@ agent can discover, pay for, and consume with no human in the loop.
 > **Status:** the full discover → pay → consume → report loop works end-to-end, and a
 > **real on-chain payment has been settled and verified on Hedera testnet** via the
 > Blocky402 x402 v2 facilitator. See [Verified payment](#verified-on-chain-payment).
+>
+> **🚀 Live demo:** <https://ethonline-dun.vercel.app/> — frontend on Vercel, backend
+> and agent on Railway (Hedera testnet). See [Live demo & deployment](#live-demo--deployment).
 
 ---
 
@@ -24,6 +27,7 @@ agent can discover, pay for, and consume with no human in the loop.
 - [Repository layout](#repository-layout)
 - [Prerequisites](#prerequisites)
 - [Quick start (local, no funds)](#quick-start-local-no-funds)
+- [Live demo & deployment](#live-demo--deployment)
 - [Running a real on-chain payment](#running-a-real-on-chain-payment)
 - [Verified on-chain payment](#verified-on-chain-payment)
 - [API reference](#api-reference)
@@ -163,7 +167,8 @@ ethonline2026/
 └── docs/        # API contract, payments, AI usage, World integration
 ```
 
-Each of `agent/` and `backend/` has its own README with module-specific detail.
+The `agent/` and `frontend/` folders each have their own README with
+module-specific detail.
 
 ---
 
@@ -203,6 +208,33 @@ cd agent && npm run dev -- 1.2.3.4 8.8.8.8 44d88612fea8a8f36de82e1278abb02f
 > **Frontend dev note:** the frontend talks to the backend/agent through Vite's proxy.
 > If the marketplace looks empty, ensure API calls use relative paths (see
 > `frontend/src/api.ts`) so they route same-origin and avoid CORS.
+
+---
+
+## Live demo & deployment
+
+**Live demo:** <https://ethonline-dun.vercel.app/>
+
+The hosted stack splits by workload:
+
+- **Frontend → Vercel** (static build). Installed/built with `npm ci` + `npm run build`
+  (see `frontend/vercel.json`). API calls use same-origin relative paths that Vercel
+  **rewrites** to the Railway services, so there are no CORS issues.
+- **Backend + Agent → Railway** (two always-on Node services, Node 22). Each has its own
+  `railway.json` (build/start/health) and a `.nvmrc` pin. Config and secrets are set as
+  Railway service variables — never committed.
+
+```
+Vercel (frontend)  ──rewrites──▶  Railway backend  (/marketplace, /api, /world, /agent-info, /health)
+                   └─rewrites──▶  Railway agent    (/events, /activity, /investigate)
+```
+
+The agent exposes `POST /investigate` so a fresh discover → pay → consume run can be
+triggered from the dashboard on demand (not just once at boot).
+
+> Both `frontend/vercel.json` (rewrite targets) and the Railway service variables must
+> point at the deployed URLs. The frontend needs no `VITE_BACKEND_URL` / `VITE_AGENT_URL`
+> in production — leaving them unset keeps calls same-origin so the rewrites apply.
 
 ---
 

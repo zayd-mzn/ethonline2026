@@ -12,16 +12,19 @@ matching marketplace service for each, pays the per-query price when the endpoin
 returns `402 Payment Required`, consumes the result, and aggregates everything
 into a single threat report with an overall verdict.
 
-> **Payment status:** the pay step currently goes through `StubPaymentClient`
-> (deterministic fake proof, no real funds move). It sits behind a `PaymentClient`
-> seam so a real Hedera-backed client swaps in without touching callers.
+> **Payment modes:** `PAYMENT_MODE=stub` (default) uses `StubPaymentClient`
+> (deterministic fake proof, no funds move) so local runs work without credentials.
+> `PAYMENT_MODE=real` uses `Blocky402HederaPaymentClient` to settle real HBAR on
+> Hedera testnet via the Blocky402 x402 v2 facilitator. Both sit behind a
+> `PaymentClient` seam, so switching modes doesn't touch the loop.
 
 ---
 
 ## Requirements
 
 - Node.js **>= 20**
-- A Hedera **testnet** account (account id + DER private key)
+- A Hedera **testnet** account (account id + private key). For `PAYMENT_MODE=real`
+  use an **ECDSA** key in HEX form (`0x…`) — the real client uses `fromStringECDSA`.
 - The marketplace **backend** running (Member 2), default `http://localhost:3001`
 
 ## Install
@@ -47,11 +50,12 @@ cp .env.example .env
 | Variable             | Required | Default                 | Description                                                        |
 | -------------------- | :------: | ----------------------- | ------------------------------------------------------------------ |
 | `HEDERA_ACCOUNT_ID`  |   yes    | —                       | Testnet account the agent pays from, e.g. `0.0.xxxxx`.             |
-| `HEDERA_PRIVATE_KEY` |   yes    | —                       | DER-encoded private key for that account (`302e0201...`).          |
+| `HEDERA_PRIVATE_KEY` |   yes    | —                       | Private key for that account. For `PAYMENT_MODE=real`, ECDSA HEX (`0x…`).  |
 | `HEDERA_NETWORK`     |    no    | `testnet`               | `testnet` \| `mainnet` \| `previewnet`.                            |
 | `BACKEND_URL`        |    no    | `http://localhost:3001` | Base URL of the marketplace backend (Member 2).                    |
 | `MAX_SPEND_HBAR`     |    no    | `1.0`                   | Spend cap (HBAR) for a single run; the budget guard enforces it.   |
-| `EVENT_STREAM_PORT`  |    no    | `3002`                  | Port for the activity event stream the frontend monitor connects to. |
+| `PAYMENT_MODE`       |    no    | `stub`                  | `stub` (no funds) \| `real` (Blocky402 on-chain settlement).        |
+| `EVENT_STREAM_PORT`  |    no    | `3002` (or `PORT`)      | Port for the activity event stream. Falls back to the platform `PORT`. |
 
 Config is validated at startup and **fails fast** with a clear message if a
 required value is missing or invalid.
@@ -123,11 +127,12 @@ While the agent runs, it serves its activity events over HTTP so the frontend
 monitor can display live progress. The server starts before the loop and keeps
 serving after the run completes (press `Ctrl-C` to exit).
 
-| Endpoint    | Description                                                      |
-| ----------- | ---------------------------------------------------------------- |
-| `/events`   | Server-Sent Events (SSE) stream of `ActivityEvent` objects.      |
-| `/activity` | JSON snapshot of recent buffered events (polling fallback).      |
-| `/health`   | Liveness probe: `{ ok, clients }`.                               |
+| Endpoint          | Description                                                      |
+| ----------------- | ---------------------------------------------------------------- |
+| `/events`         | Server-Sent Events (SSE) stream of `ActivityEvent` objects.      |
+| `/activity`       | JSON snapshot of recent buffered events (polling fallback).      |
+| `/health`         | Liveness probe: `{ ok, clients }`.                               |
+| `POST /investigate` | Trigger a fresh run on demand. Body `{ "indicators": [...] }` (optional; empty → demo set). Returns `202` (started), `409` (a run is already in flight). |
 
 A ring buffer replays recent events to clients that connect mid-run, so a late
 frontend isn't left blank. Each event is `{ ts, stage, detail }`, where `stage`
