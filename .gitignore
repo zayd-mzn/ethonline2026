@@ -5,6 +5,8 @@ yarn-debug.log*
 yarn-error.log*
 pnpm-debug.log*
 package-lock.json
+# Exception: the frontend deploys on Vercel via `npm ci`, which needs its lockfile.
+!frontend/package-lock.json
 
 # Environment variables (IMPORTANT: never commit secrets!)
 .env

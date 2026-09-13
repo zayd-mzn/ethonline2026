@@ -1,8 +1,8 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
-  "buildCommand": "pnpm build",
+  "buildCommand": "npm run build",
   "outputDirectory": "dist",
-  "installCommand": "pnpm install",
+  "installCommand": "npm ci",
   "framework": "vite",
   "rewrites": [
     { "source": "/marketplace/:path*", "destination": "https://ethonline2026-production.up.railway.app/marketplace/:path*" },
